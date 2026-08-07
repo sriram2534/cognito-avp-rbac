@@ -57,9 +57,7 @@ public class PolicyService {
         GroupNameParser target = GroupNameParser.parse(request.groupName());
         String namespace = avpProperties.getNamespace();
 
-        // Authorization checks
-        validateCallerCanCreatePolicy(target, callerGroups);
-
+        // Authorization is enforced upstream by AVP (see PolicyController#authorizeGroupManagement).
         // Generate the Cedar policy statement
         String statement = generatePolicyStatement(request, target, namespace);
         String description = request.description() != null
@@ -78,6 +76,37 @@ public class PolicyService {
                         .build());
 
         log.info("Created policy [{}] for group [{}]", response.policyId(), request.groupName());
+
+        return new PolicyResponse(
+                response.policyId(),
+                "STATIC",
+                statement,
+                description,
+                response.createdDate(),
+                response.lastUpdatedDate()
+        );
+    }
+
+    /**
+     * Creates a static policy from a raw Cedar statement. Used for baseline/bootstrap
+     * policies that do not follow the group-name convention (e.g. global guard policies).
+     *
+     * @param statement   the Cedar policy statement
+     * @param description  a human-readable description
+     * @return the created policy metadata
+     */
+    public PolicyResponse createStaticPolicy(String statement, String description) {
+        CreatePolicyResponse response = avpClient.createPolicy(
+                software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
+                        .policyStoreId(avpProperties.getPolicyStoreId())
+                        .definition(PolicyDefinition.fromStaticValue(
+                                StaticPolicyDefinition.builder()
+                                        .statement(statement)
+                                        .description(description)
+                                        .build()))
+                        .build());
+
+        log.info("Created static policy [{}]: {}", response.policyId(), description);
 
         return new PolicyResponse(
                 response.policyId(),
@@ -266,29 +295,6 @@ public class PolicyService {
 
     // ─── Private helpers ────────────────────────────────────────────────────────
 
-    private void validateCallerCanCreatePolicy(GroupNameParser target, List<String> callerGroups) {
-        // Rule 1: Only super admin can create module admin groups
-        if (target.isModuleAdmin() && !target.isSuperAdmin()) {
-            if (!isSuperAdmin(callerGroups)) {
-                throw new AccessDeniedException(
-                        "Only super admins can create module admin policies. " +
-                                "Module admins cannot create other module admins.");
-            }
-        }
-
-        // Rule 2: Module admins can only create policies within their own module
-        if (target.isResourceLevel()) {
-            boolean callerIsSuper = isSuperAdmin(callerGroups);
-            boolean callerIsModuleAdmin = isModuleAdmin(callerGroups, target.module());
-
-            if (!callerIsSuper && !callerIsModuleAdmin) {
-                throw new AccessDeniedException(
-                        "You must be a super admin or module admin of '" + target.module() +
-                                "' to create policies for this module.");
-            }
-        }
-    }
-
     private String generatePolicyStatement(CreatePolicyRequest request,
                                             GroupNameParser target,
                                             String namespace) {
@@ -313,12 +319,6 @@ public class PolicyService {
 
     private boolean isSuperAdmin(List<String> groups) {
         return groups != null && groups.contains(avpProperties.getSuperAdminGroup());
-    }
-
-    private boolean isModuleAdmin(List<String> groups, String module) {
-        if (groups == null) return false;
-        String expectedGroup = module + ":global:admin";
-        return groups.contains(expectedGroup);
     }
 
     private boolean isAnyModuleAdmin(List<String> groups) {

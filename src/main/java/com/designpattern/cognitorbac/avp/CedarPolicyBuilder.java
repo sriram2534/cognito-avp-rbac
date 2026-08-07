@@ -72,6 +72,28 @@ public final class CedarPolicyBuilder {
     }
 
     /**
+     * Builds the global creation-guard forbid policy that prevents anyone except
+     * the super admin from creating/managing a module-admin group. The decision
+     * keys off the {@code resourceType == "moduleAdminGroup"} attribute supplied
+     * by the application at authorization time.
+     *
+     * @param namespace       the Cedar namespace (e.g. "Portal")
+     * @param superAdminGroup the super admin group name (e.g. "global:global:admin")
+     */
+    public static String moduleAdminCreationGuardPolicy(String namespace, String superAdminGroup) {
+        return """
+                forbid (
+                    principal,
+                    action,
+                    resource
+                ) when {
+                    resource.resourceType == "moduleAdminGroup"
+                } unless {
+                    principal in %s::Group::"%s"
+                };""".formatted(namespace, superAdminGroup);
+    }
+
+    /**
      * Builds a permit policy for a module-wide action (e.g. ops:global:write would mean
      * write on all resources in ops — though typically only admin uses global).
      */
