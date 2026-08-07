@@ -11,6 +11,7 @@ import com.designpattern.cognitorbac.service.PolicyService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -80,6 +81,7 @@ public class PolicyController {
      */
     @PostMapping
     public ResponseEntity<PolicyResponse> createPolicy(@Valid @RequestBody CreatePolicyRequest request) {
+        authorizeGroupManagement(request.groupName());
         List<String> callerGroups = securityContextHelper.getCallerGroups();
         PolicyResponse response = policyService.createPolicy(request, callerGroups);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -128,9 +130,24 @@ public class PolicyController {
     @PostMapping("/auto-create")
     public ResponseEntity<PolicyResponse> autoCreatePolicyForGroup(
             @RequestParam String groupName) {
+        authorizeGroupManagement(groupName);
         List<String> callerGroups = securityContextHelper.getCallerGroups();
         PolicyResponse response = policyService.createPolicyForGroup(groupName, callerGroups);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Authorizes a group-management operation via AVP. The Cedar policies decide
+     * whether the caller may create/manage the target group: module-admin groups
+     * are restricted to super admins, resource groups to the owning module admin.
+     *
+     * @throws AccessDeniedException if AVP returns DENY
+     */
+    private void authorizeGroupManagement(String groupName) {
+        String identityToken = securityContextHelper.getIdentityToken();
+        if (identityToken == null || !authorizationService.canManageGroup(identityToken, groupName)) {
+            throw new AccessDeniedException("Not authorized to manage group: " + groupName);
+        }
     }
 
     /**

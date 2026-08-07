@@ -1,5 +1,6 @@
 package com.designpattern.cognitorbac.service;
 
+import com.designpattern.cognitorbac.avp.GroupNameParser;
 import com.designpattern.cognitorbac.config.VerifiedPermissionsProperties;
 import com.designpattern.cognitorbac.dto.avp.AuthorizationResponse;
 import org.slf4j.Logger;
@@ -153,6 +154,47 @@ public class AuthorizationService {
             log.error("Authorization evaluation failed", e);
             return new AuthorizationResponse("DENY", List.of(), List.of(e.getMessage()));
         }
+    }
+
+    /** Resource name for creating/managing a module-admin group (super-admin only). */
+    public static final String RESOURCE_MODULE_ADMIN_GROUP = "moduleAdminGroup";
+
+    /** Resource name for creating/managing a resource-level group (module admin within its module). */
+    public static final String RESOURCE_GROUP = "resourceGroup";
+
+    /**
+     * Authorizes a group-management operation (create/update a Cognito group).
+     *
+     * <p>The group name is classified into a {@code resourceName}
+     * ({@link #RESOURCE_MODULE_ADMIN_GROUP} vs {@link #RESOURCE_GROUP}) and the
+     * decision is delegated to AVP as a {@code Write} action on the
+     * {@code Portal::Resource} identified by {@code (module, resourceName)}.
+     * The caller's group membership is derived by AVP from the identity token;
+     * the application never passes caller groups.</p>
+     *
+     * <p>The ALLOW/DENY decision is made entirely by the Cedar policies: a
+     * {@code moduleAdminGroup} is gated to super admins via the forbid policy,
+     * while a {@code resourceGroup} is permitted to the matching module admin.
+     * Super admins can create both.</p>
+     *
+     * @param identityToken the caller's raw Cognito ID token JWT
+     * @param groupName     the target group name (module:resource:access)
+     * @return true if AVP returns ALLOW
+     */
+    public boolean canManageGroup(String identityToken, String groupName) {
+        GroupNameParser target;
+        try {
+            target = GroupNameParser.parse(groupName);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Rejecting group-management authorization for malformed group name: {}", groupName);
+            return false;
+        }
+
+        String resourceName = target.isModuleAdmin()
+                ? RESOURCE_MODULE_ADMIN_GROUP
+                : RESOURCE_GROUP;
+
+        return isAuthorized(identityToken, "Write", target.module(), resourceName);
     }
 
     /**

@@ -72,6 +72,10 @@ public class PolicyStoreBootstrapService {
         createSuperAdminPolicy();
         log.info("Super admin policy created");
 
+        // Step 5: Create the module-admin creation guard (only super admin may create module admins)
+        createModuleAdminGuardPolicy();
+        log.info("Module-admin creation guard policy created");
+
         log.info("Bootstrap complete. Policy Store ID: {}", policyStoreId);
         return policyStoreId;
     }
@@ -139,5 +143,18 @@ public class PolicyStoreBootstrapService {
                 );
 
         policyService.createPolicy(request, bootstrapGroups);
+    }
+
+    /**
+     * Creates the global guard policy that forbids anyone except the super admin
+     * from creating/managing a module-admin group (resourceType == "moduleAdminGroup").
+     */
+    private void createModuleAdminGuardPolicy() {
+        String namespace = avpProperties.getNamespace();
+        String superAdminGroup = avpProperties.getSuperAdminGroup();
+        String statement = com.designpattern.cognitorbac.avp.CedarPolicyBuilder
+                .moduleAdminCreationGuardPolicy(namespace, superAdminGroup);
+        policyService.createStaticPolicy(statement,
+                "Creation guard: only super admin may create module-admin groups");
     }
 }
