@@ -82,8 +82,7 @@ public class PolicyController {
     @PostMapping
     public ResponseEntity<PolicyResponse> createPolicy(@Valid @RequestBody CreatePolicyRequest request) {
         authorizeGroupManagement(request.groupName());
-        List<String> callerGroups = securityContextHelper.getCallerGroups();
-        PolicyResponse response = policyService.createPolicy(request, callerGroups);
+        PolicyResponse response = policyService.createPolicy(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -131,8 +130,7 @@ public class PolicyController {
     public ResponseEntity<PolicyResponse> autoCreatePolicyForGroup(
             @RequestParam String groupName) {
         authorizeGroupManagement(groupName);
-        List<String> callerGroups = securityContextHelper.getCallerGroups();
-        PolicyResponse response = policyService.createPolicyForGroup(groupName, callerGroups);
+        PolicyResponse response = policyService.createPolicyForGroup(groupName);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

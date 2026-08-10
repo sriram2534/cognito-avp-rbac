@@ -6,11 +6,14 @@ import com.designpattern.cognitorbac.config.VerifiedPermissionsProperties;
 import com.designpattern.cognitorbac.dto.avp.CreatePolicyRequest;
 import com.designpattern.cognitorbac.dto.avp.PolicyResponse;
 import com.designpattern.cognitorbac.dto.avp.UpdatePolicyRequest;
+import com.designpattern.cognitorbac.exception.AvpIntegrationException;
+import com.designpattern.cognitorbac.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.verifiedpermissions.VerifiedPermissionsClient;
+import software.amazon.awssdk.services.verifiedpermissions.model.VerifiedPermissionsException;
 import software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyResponse;
 import software.amazon.awssdk.services.verifiedpermissions.model.DeletePolicyRequest;
 import software.amazon.awssdk.services.verifiedpermissions.model.GetPolicyRequest;
@@ -53,7 +56,7 @@ public class PolicyService {
      * @param request      the policy creation request
      * @param callerGroups the groups of the authenticated caller (for authorization)
      */
-    public PolicyResponse createPolicy(CreatePolicyRequest request, List<String> callerGroups) {
+    public PolicyResponse createPolicy(CreatePolicyRequest request) {
         GroupNameParser target = GroupNameParser.parse(request.groupName());
         String namespace = avpProperties.getNamespace();
 
@@ -64,27 +67,30 @@ public class PolicyService {
                 ? request.description()
                 : "Policy for group: " + request.groupName();
 
-        // Create in AVP
-        CreatePolicyResponse response = avpClient.createPolicy(
-                software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
-                        .policyStoreId(avpProperties.getPolicyStoreId())
-                        .definition(PolicyDefinition.fromStaticValue(
-                                StaticPolicyDefinition.builder()
-                                        .statement(statement)
-                                        .description(description)
-                                        .build()))
-                        .build());
+        try {
+            CreatePolicyResponse response = avpClient.createPolicy(
+                    software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
+                            .policyStoreId(avpProperties.getPolicyStoreId())
+                            .definition(PolicyDefinition.fromStaticValue(
+                                    StaticPolicyDefinition.builder()
+                                            .statement(statement)
+                                            .description(description)
+                                            .build()))
+                            .build());
 
-        log.info("Created policy [{}] for group [{}]", response.policyId(), request.groupName());
+            log.info("Created policy [{}] for group [{}]", response.policyId(), request.groupName());
 
-        return new PolicyResponse(
-                response.policyId(),
-                "STATIC",
-                statement,
-                description,
-                response.createdDate(),
-                response.lastUpdatedDate()
-        );
+            return new PolicyResponse(
+                    response.policyId(),
+                    "STATIC",
+                    statement,
+                    description,
+                    response.createdDate(),
+                    response.lastUpdatedDate()
+            );
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("createPolicy", request.groupName(), ex);
+        }
     }
 
     /**
@@ -96,26 +102,30 @@ public class PolicyService {
      * @return the created policy metadata
      */
     public PolicyResponse createStaticPolicy(String statement, String description) {
-        CreatePolicyResponse response = avpClient.createPolicy(
-                software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
-                        .policyStoreId(avpProperties.getPolicyStoreId())
-                        .definition(PolicyDefinition.fromStaticValue(
-                                StaticPolicyDefinition.builder()
-                                        .statement(statement)
-                                        .description(description)
-                                        .build()))
-                        .build());
+        try {
+            CreatePolicyResponse response = avpClient.createPolicy(
+                    software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
+                            .policyStoreId(avpProperties.getPolicyStoreId())
+                            .definition(PolicyDefinition.fromStaticValue(
+                                    StaticPolicyDefinition.builder()
+                                            .statement(statement)
+                                            .description(description)
+                                            .build()))
+                            .build());
 
-        log.info("Created static policy [{}]: {}", response.policyId(), description);
+            log.info("Created static policy [{}]: {}", response.policyId(), description);
 
-        return new PolicyResponse(
-                response.policyId(),
-                "STATIC",
-                statement,
-                description,
-                response.createdDate(),
-                response.lastUpdatedDate()
-        );
+            return new PolicyResponse(
+                    response.policyId(),
+                    "STATIC",
+                    statement,
+                    description,
+                    response.createdDate(),
+                    response.lastUpdatedDate()
+            );
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("createStaticPolicy", description, ex);
+        }
     }
 
     /**
@@ -131,42 +141,46 @@ public class PolicyService {
         String groupName = moduleName + ":global:admin";
         List<PolicyResponse> results = new ArrayList<>();
 
-        // Permit policy: all actions within module
-        String permitStatement = CedarPolicyBuilder.moduleAdminPolicy(namespace, groupName, moduleName);
-        CreatePolicyResponse permitResponse = avpClient.createPolicy(
-                software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
-                        .policyStoreId(avpProperties.getPolicyStoreId())
-                        .definition(PolicyDefinition.fromStaticValue(
-                                StaticPolicyDefinition.builder()
-                                        .statement(permitStatement)
-                                        .description("Module admin permit: " + groupName)
-                                        .build()))
-                        .build());
+        try {
+            // Permit policy: all actions within module
+            String permitStatement = CedarPolicyBuilder.moduleAdminPolicy(namespace, groupName, moduleName);
+            CreatePolicyResponse permitResponse = avpClient.createPolicy(
+                    software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
+                            .policyStoreId(avpProperties.getPolicyStoreId())
+                            .definition(PolicyDefinition.fromStaticValue(
+                                    StaticPolicyDefinition.builder()
+                                            .statement(permitStatement)
+                                            .description("Module admin permit: " + groupName)
+                                            .build()))
+                            .build());
 
-        results.add(new PolicyResponse(
-                permitResponse.policyId(), "STATIC", permitStatement,
-                "Module admin permit: " + groupName,
-                permitResponse.createdDate(), permitResponse.lastUpdatedDate()));
+            results.add(new PolicyResponse(
+                    permitResponse.policyId(), "STATIC", permitStatement,
+                    "Module admin permit: " + groupName,
+                    permitResponse.createdDate(), permitResponse.lastUpdatedDate()));
 
-        // Forbid policy: cannot access other modules
-        String forbidStatement = CedarPolicyBuilder.moduleAdminForbidPolicy(namespace, groupName, moduleName);
-        CreatePolicyResponse forbidResponse = avpClient.createPolicy(
-                software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
-                        .policyStoreId(avpProperties.getPolicyStoreId())
-                        .definition(PolicyDefinition.fromStaticValue(
-                                StaticPolicyDefinition.builder()
-                                        .statement(forbidStatement)
-                                        .description("Module admin forbid outside module: " + groupName)
-                                        .build()))
-                        .build());
+            // Forbid policy: cannot access other modules
+            String forbidStatement = CedarPolicyBuilder.moduleAdminForbidPolicy(namespace, groupName, moduleName);
+            CreatePolicyResponse forbidResponse = avpClient.createPolicy(
+                    software.amazon.awssdk.services.verifiedpermissions.model.CreatePolicyRequest.builder()
+                            .policyStoreId(avpProperties.getPolicyStoreId())
+                            .definition(PolicyDefinition.fromStaticValue(
+                                    StaticPolicyDefinition.builder()
+                                            .statement(forbidStatement)
+                                            .description("Module admin forbid outside module: " + groupName)
+                                            .build()))
+                            .build());
 
-        results.add(new PolicyResponse(
-                forbidResponse.policyId(), "STATIC", forbidStatement,
-                "Module admin forbid outside module: " + groupName,
-                forbidResponse.createdDate(), forbidResponse.lastUpdatedDate()));
+            results.add(new PolicyResponse(
+                    forbidResponse.policyId(), "STATIC", forbidStatement,
+                    "Module admin forbid outside module: " + groupName,
+                    forbidResponse.createdDate(), forbidResponse.lastUpdatedDate()));
 
-        log.info("Created module admin policies for module [{}]", moduleName);
-        return results;
+            log.info("Created module admin policies for module [{}]", moduleName);
+            return results;
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("createModuleAdminPolicies", moduleName, ex);
+        }
     }
 
     /**
@@ -178,53 +192,65 @@ public class PolicyService {
             throw new AccessDeniedException("Only admins can update policies");
         }
 
-        UpdatePolicyResponse response = avpClient.updatePolicy(
-                software.amazon.awssdk.services.verifiedpermissions.model.UpdatePolicyRequest.builder()
-                        .policyStoreId(avpProperties.getPolicyStoreId())
-                        .policyId(request.policyId())
-                        .definition(software.amazon.awssdk.services.verifiedpermissions.model.UpdatePolicyDefinition.fromStaticValue(
-                                software.amazon.awssdk.services.verifiedpermissions.model.UpdateStaticPolicyDefinition.builder()
-                                        .statement(request.statement())
-                                        .description(request.description())
-                                        .build()))
-                        .build());
+        try {
+            UpdatePolicyResponse response = avpClient.updatePolicy(
+                    software.amazon.awssdk.services.verifiedpermissions.model.UpdatePolicyRequest.builder()
+                            .policyStoreId(avpProperties.getPolicyStoreId())
+                            .policyId(request.policyId())
+                            .definition(software.amazon.awssdk.services.verifiedpermissions.model.UpdatePolicyDefinition.fromStaticValue(
+                                    software.amazon.awssdk.services.verifiedpermissions.model.UpdateStaticPolicyDefinition.builder()
+                                            .statement(request.statement())
+                                            .description(request.description())
+                                            .build()))
+                            .build());
 
-        log.info("Updated policy [{}]", request.policyId());
+            log.info("Updated policy [{}]", request.policyId());
 
-        return new PolicyResponse(
-                response.policyId(),
-                "STATIC",
-                request.statement(),
-                request.description(),
-                response.createdDate(),
-                response.lastUpdatedDate()
-        );
+            return new PolicyResponse(
+                    response.policyId(),
+                    "STATIC",
+                    request.statement(),
+                    request.description(),
+                    response.createdDate(),
+                    response.lastUpdatedDate()
+            );
+        } catch (software.amazon.awssdk.services.verifiedpermissions.model.ResourceNotFoundException ex) {
+            throw new ResourceNotFoundException("Policy not found: " + request.policyId());
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("updatePolicy", request.policyId(), ex);
+        }
     }
 
     /**
      * Retrieves a single policy by ID.
      */
     public PolicyResponse getPolicy(String policyId) {
-        GetPolicyResponse response = avpClient.getPolicy(GetPolicyRequest.builder()
-                .policyStoreId(avpProperties.getPolicyStoreId())
-                .policyId(policyId)
-                .build());
+        try {
+            GetPolicyResponse response = avpClient.getPolicy(GetPolicyRequest.builder()
+                    .policyStoreId(avpProperties.getPolicyStoreId())
+                    .policyId(policyId)
+                    .build());
 
-        String statement = response.definition().staticValue() != null
-                ? response.definition().staticValue().statement()
-                : "";
-        String description = response.definition().staticValue() != null
-                ? response.definition().staticValue().description()
-                : "";
+            String statement = response.definition().staticValue() != null
+                    ? response.definition().staticValue().statement()
+                    : "";
+            String description = response.definition().staticValue() != null
+                    ? response.definition().staticValue().description()
+                    : "";
 
-        return new PolicyResponse(
-                response.policyId(),
-                response.policyTypeAsString(),
-                statement,
-                description,
-                response.createdDate(),
-                response.lastUpdatedDate()
-        );
+            return new PolicyResponse(
+                    response.policyId(),
+                    response.policyTypeAsString(),
+                    statement,
+                    description,
+                    response.createdDate(),
+                    response.lastUpdatedDate()
+            );
+        } catch (software.amazon.awssdk.services.verifiedpermissions.model.ResourceNotFoundException ex) {
+            throw new ResourceNotFoundException("Policy not found: " + policyId);
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("getPolicy", policyId, ex);
+        }
     }
 
     /**
@@ -234,29 +260,33 @@ public class PolicyService {
         List<PolicyResponse> results = new ArrayList<>();
         String nextToken = null;
 
-        do {
-            ListPoliciesRequest.Builder requestBuilder = ListPoliciesRequest.builder()
-                    .policyStoreId(avpProperties.getPolicyStoreId())
-                    .maxResults(50);
-            if (nextToken != null) {
-                requestBuilder.nextToken(nextToken);
-            }
+        try {
+            do {
+                ListPoliciesRequest.Builder requestBuilder = ListPoliciesRequest.builder()
+                        .policyStoreId(avpProperties.getPolicyStoreId())
+                        .maxResults(50);
+                if (nextToken != null) {
+                    requestBuilder.nextToken(nextToken);
+                }
 
-            ListPoliciesResponse response = avpClient.listPolicies(requestBuilder.build());
+                ListPoliciesResponse response = avpClient.listPolicies(requestBuilder.build());
 
-            for (PolicyItem item : response.policies()) {
-                results.add(new PolicyResponse(
-                        item.policyId(),
-                        item.policyTypeAsString(),
-                        null, // statement not included in list response
-                        item.definition().staticValue() != null ? item.definition().staticValue().description() : null,
-                        item.createdDate(),
-                        item.lastUpdatedDate()
-                ));
-            }
+                for (PolicyItem item : response.policies()) {
+                    results.add(new PolicyResponse(
+                            item.policyId(),
+                            item.policyTypeAsString(),
+                            null, // statement not included in list response
+                            item.definition().staticValue() != null ? item.definition().staticValue().description() : null,
+                            item.createdDate(),
+                            item.lastUpdatedDate()
+                    ));
+                }
 
-            nextToken = response.nextToken();
-        } while (nextToken != null);
+                nextToken = response.nextToken();
+            } while (nextToken != null);
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("listPolicies", avpProperties.getPolicyStoreId(), ex);
+        }
 
         return results;
     }
@@ -269,19 +299,24 @@ public class PolicyService {
             throw new AccessDeniedException("Only super admins can delete policies");
         }
 
-        avpClient.deletePolicy(DeletePolicyRequest.builder()
-                .policyStoreId(avpProperties.getPolicyStoreId())
-                .policyId(policyId)
-                .build());
-
-        log.info("Deleted policy [{}]", policyId);
+        try {
+            avpClient.deletePolicy(DeletePolicyRequest.builder()
+                    .policyStoreId(avpProperties.getPolicyStoreId())
+                    .policyId(policyId)
+                    .build());
+            log.info("Deleted policy [{}]", policyId);
+        } catch (software.amazon.awssdk.services.verifiedpermissions.model.ResourceNotFoundException ex) {
+            throw new ResourceNotFoundException("Policy not found: " + policyId);
+        } catch (VerifiedPermissionsException ex) {
+            throw wrap("deletePolicy", policyId, ex);
+        }
     }
 
     /**
      * Auto-generates the correct policy when a new Cognito group is created.
      * Call this from GroupService after creating a group in Cognito.
      */
-    public PolicyResponse createPolicyForGroup(String groupName, List<String> callerGroups) {
+    public PolicyResponse createPolicyForGroup(String groupName) {
         GroupNameParser parsed = GroupNameParser.parse(groupName);
         String action = parsed.cedarAction();
 
@@ -290,10 +325,16 @@ public class PolicyService {
                 "Auto-generated policy for group: " + groupName
         );
 
-        return createPolicy(request, callerGroups);
+        return createPolicy(request);
     }
 
     // ─── Private helpers ────────────────────────────────────────────────────────
+
+    private AvpIntegrationException wrap(String operation, String context, VerifiedPermissionsException ex) {
+        log.error("AVP {} failed for [{}]: {}", operation, context,
+                ex.awsErrorDetails() != null ? ex.awsErrorDetails().errorMessage() : ex.getMessage());
+        return AvpIntegrationException.forOperation(operation, ex);
+    }
 
     private String generatePolicyStatement(CreatePolicyRequest request,
                                             GroupNameParser target,

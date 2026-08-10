@@ -190,11 +190,22 @@ public class AuthorizationService {
             return false;
         }
 
-        String resourceName = target.isModuleAdmin()
-                ? RESOURCE_MODULE_ADMIN_GROUP
-                : RESOURCE_GROUP;
+        if (target.isSuperAdmin()) {
+            // global:global:admin creation — only super admins can do this.
+            // AVP super-admin permit policy (no conditions) allows it;
+            // the moduleAdminCreationGuard forbid policy blocks everyone else.
+            return isAuthorized(identityToken, "Write", target.module(), RESOURCE_MODULE_ADMIN_GROUP);
+        }
 
-        return isAuthorized(identityToken, "Write", target.module(), resourceName);
+        if (target.isModuleAdmin()) {
+            // module:global:admin creation — only super admins can do this.
+            // AVP moduleAdminCreationGuard forbid policy blocks module admins from creating peers.
+            return isAuthorized(identityToken, "Write", target.module(), RESOURCE_MODULE_ADMIN_GROUP);
+        }
+
+        // module:resource:access creation — super admins and the owning module admin can do this.
+        // AVP module admin permit policy (scoped to resource.module) allows the owning module admin.
+        return isAuthorized(identityToken, "Write", target.module(), RESOURCE_GROUP);
     }
 
     /**

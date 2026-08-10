@@ -2,6 +2,7 @@ package com.designpattern.cognitorbac.controller;
 
 import com.designpattern.cognitorbac.dto.AddUsersToGroupRequest;
 import com.designpattern.cognitorbac.dto.CreateGroupRequest;
+import com.designpattern.cognitorbac.dto.CreateGroupWithPolicyResponse;
 import com.designpattern.cognitorbac.dto.GroupResponse;
 import com.designpattern.cognitorbac.dto.PagedResponse;
 import com.designpattern.cognitorbac.dto.UpdateGroupRequest;
@@ -64,13 +65,25 @@ public class GroupController {
         return ResponseEntity.ok(groupService.getGroup(groupName));
     }
 
+    /**
+     * Creates a Cognito group and its AVP policy in a single atomic operation.
+     *
+     * <p>Authorization is enforced by AVP based on the target group name:
+     * <ul>
+     *   <li>{@code global:global:admin} — can create any group type</li>
+     *   <li>{@code module:global:admin} — can only create resource-level groups
+     *       within their own module</li>
+     *   <li>All others — denied (403)</li>
+     * </ul>
+     */
     @PostMapping
-    public ResponseEntity<GroupResponse> createGroup(@Valid @RequestBody CreateGroupRequest request,
-                                                     UriComponentsBuilder uriBuilder) {
+    public ResponseEntity<CreateGroupWithPolicyResponse> createGroup(
+            @Valid @RequestBody CreateGroupRequest request,
+            UriComponentsBuilder uriBuilder) {
         authorizeGroupManagement(request.groupName());
-        GroupResponse created = groupService.createGroup(request);
+        CreateGroupWithPolicyResponse created = groupService.createGroupWithPolicy(request);
         URI location = uriBuilder.path("/api/v1/groups/{groupName}")
-                .buildAndExpand(created.groupName())
+                .buildAndExpand(created.group().groupName())
                 .toUri();
         return ResponseEntity.created(location).body(created);
     }

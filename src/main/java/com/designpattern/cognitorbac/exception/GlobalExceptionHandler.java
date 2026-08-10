@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -36,6 +37,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        log.warn("Access denied: {} {}", request.getMethod(), request.getRequestURI());
         return build(HttpStatus.FORBIDDEN, "Access is denied", request);
     }
 
@@ -70,8 +72,27 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CognitoIntegrationException.class)
     public ResponseEntity<ApiError> handleCognito(CognitoIntegrationException ex, HttpServletRequest request) {
-        log.error("Cognito integration failure", ex);
+        log.error("Cognito integration failure at {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.BAD_GATEWAY, "Upstream identity provider error", request);
+    }
+
+    @ExceptionHandler(AvpIntegrationException.class)
+    public ResponseEntity<ApiError> handleAvp(AvpIntegrationException ex, HttpServletRequest request) {
+        log.error("AVP integration failure at {} {}", request.getMethod(), request.getRequestURI(), ex);
+        return build(HttpStatus.BAD_GATEWAY, "Upstream authorization service error", request);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+        log.warn("Invalid argument at {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParam(MissingServletRequestParameterException ex,
+                                                       HttpServletRequest request) {
+        String message = "Required parameter '" + ex.getParameterName() + "' is missing";
+        return build(HttpStatus.BAD_REQUEST, message, request);
     }
 
     @ExceptionHandler(Exception.class)

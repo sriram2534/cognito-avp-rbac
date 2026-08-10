@@ -131,7 +131,6 @@ public class PolicyStoreBootstrapService {
      */
     private void createSuperAdminPolicy() {
         String superAdminGroup = avpProperties.getSuperAdminGroup();
-        List<String> bootstrapGroups = List.of(superAdminGroup);
 
         com.designpattern.cognitorbac.dto.avp.CreatePolicyRequest request =
                 new com.designpattern.cognitorbac.dto.avp.CreatePolicyRequest(
@@ -142,7 +141,7 @@ public class PolicyStoreBootstrapService {
                         "Super admin: unrestricted access to all modules and resources"
                 );
 
-        policyService.createPolicy(request, bootstrapGroups);
+        policyService.createPolicy(request);
     }
 
     /**
