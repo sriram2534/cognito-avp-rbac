@@ -63,6 +63,14 @@ public class SecurityContextHelper {
         return jwt != null ? jwt.getSubject() : null;
     }
 
+    /**
+     * Gets the authenticated user's email from the JWT email claim.
+     */
+    public String getCallerEmail() {
+        Jwt jwt = getJwt();
+        return jwt != null ? jwt.getClaimAsString("email") : null;
+    }
+
     private Jwt getJwt() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {

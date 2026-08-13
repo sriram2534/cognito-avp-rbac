@@ -105,8 +105,8 @@ public class PolicyController {
      */
     @PutMapping
     public ResponseEntity<PolicyResponse> updatePolicy(@Valid @RequestBody UpdatePolicyRequest request) {
-        List<String> callerGroups = securityContextHelper.getCallerGroups();
-        PolicyResponse response = policyService.updatePolicy(request, callerGroups);
+        authorizeGroupManagement(request.groupName());
+        PolicyResponse response = policyService.updatePolicy(request);
         return ResponseEntity.ok(response);
     }
 

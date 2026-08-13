@@ -10,6 +10,9 @@ public record UpdatePolicyRequest(
         @NotBlank(message = "policyId is required")
         String policyId,
 
+        @NotBlank(message = "groupName is required")
+        String groupName,
+
         @NotBlank(message = "statement is required")
         String statement,
 

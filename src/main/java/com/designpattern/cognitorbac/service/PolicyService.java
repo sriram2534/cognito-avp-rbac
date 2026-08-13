@@ -186,12 +186,7 @@ public class PolicyService {
     /**
      * Updates an existing policy's Cedar statement.
      */
-    public PolicyResponse updatePolicy(UpdatePolicyRequest request, List<String> callerGroups) {
-        // Verify the caller has access (at minimum must be a module admin or super admin)
-        if (!isSuperAdmin(callerGroups) && !isAnyModuleAdmin(callerGroups)) {
-            throw new AccessDeniedException("Only admins can update policies");
-        }
-
+    public PolicyResponse updatePolicy(UpdatePolicyRequest request) {
         try {
             UpdatePolicyResponse response = avpClient.updatePolicy(
                     software.amazon.awssdk.services.verifiedpermissions.model.UpdatePolicyRequest.builder()
@@ -362,15 +357,4 @@ public class PolicyService {
         return groups != null && groups.contains(avpProperties.getSuperAdminGroup());
     }
 
-    private boolean isAnyModuleAdmin(List<String> groups) {
-        if (groups == null) return false;
-        return groups.stream().anyMatch(g -> {
-            try {
-                GroupNameParser parsed = GroupNameParser.parse(g);
-                return parsed.isModuleAdmin();
-            } catch (IllegalArgumentException e) {
-                return false;
-            }
-        });
-    }
 }

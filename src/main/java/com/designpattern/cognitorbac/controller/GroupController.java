@@ -7,6 +7,7 @@ import com.designpattern.cognitorbac.dto.GroupResponse;
 import com.designpattern.cognitorbac.dto.PagedResponse;
 import com.designpattern.cognitorbac.dto.UpdateGroupRequest;
 import com.designpattern.cognitorbac.dto.UserResponse;
+import com.designpattern.cognitorbac.audit.AuditContextFilter;
 import com.designpattern.cognitorbac.avp.SecurityContextHelper;
 import com.designpattern.cognitorbac.service.AuthorizationService;
 import com.designpattern.cognitorbac.service.GroupService;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -79,6 +81,7 @@ public class GroupController {
     @PostMapping
     public ResponseEntity<CreateGroupWithPolicyResponse> createGroup(
             @Valid @RequestBody CreateGroupRequest request,
+            @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason,
             UriComponentsBuilder uriBuilder) {
         authorizeGroupManagement(request.groupName());
         CreateGroupWithPolicyResponse created = groupService.createGroupWithPolicy(request);
@@ -90,7 +93,8 @@ public class GroupController {
 
     @PutMapping("/{groupName}")
     public ResponseEntity<GroupResponse> updateGroup(@PathVariable String groupName,
-                                                     @Valid @RequestBody UpdateGroupRequest request) {
+                                                     @Valid @RequestBody UpdateGroupRequest request,
+                                                     @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
         authorizeGroupManagement(groupName);
         return ResponseEntity.ok(groupService.updateGroup(groupName, request));
     }
@@ -105,7 +109,8 @@ public class GroupController {
 
     @PostMapping("/{groupName}/users")
     public ResponseEntity<Void> addUsersToGroup(@PathVariable String groupName,
-                                                @Valid @RequestBody AddUsersToGroupRequest request) {
+                                                @Valid @RequestBody AddUsersToGroupRequest request,
+                                                @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
         authorizeGroupManagement(groupName);
         request.usernames().forEach(username -> groupService.addUserToGroup(groupName, username));
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
@@ -113,7 +118,8 @@ public class GroupController {
 
     @DeleteMapping("/{groupName}/users/{username}")
     public ResponseEntity<Void> removeUserFromGroup(@PathVariable String groupName,
-                                                    @PathVariable String username) {
+                                                    @PathVariable String username,
+                                                    @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
         authorizeGroupManagement(groupName);
         groupService.removeUserFromGroup(groupName, username);
         return ResponseEntity.noContent().build();

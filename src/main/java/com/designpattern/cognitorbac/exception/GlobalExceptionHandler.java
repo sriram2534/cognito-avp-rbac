@@ -1,6 +1,7 @@
 package com.designpattern.cognitorbac.exception;
 
 import com.designpattern.cognitorbac.dto.ApiError;
+import com.designpattern.cognitorbac.exception.AuditException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -80,6 +81,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAvp(AvpIntegrationException ex, HttpServletRequest request) {
         log.error("AVP integration failure at {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.BAD_GATEWAY, "Upstream authorization service error", request);
+    }
+
+    @ExceptionHandler(AuditException.class)
+    public ResponseEntity<ApiError> handleAudit(AuditException ex, HttpServletRequest request) {
+        log.error("Audit query failure at {} {}", request.getMethod(), request.getRequestURI(), ex);
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "Audit service temporarily unavailable", request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

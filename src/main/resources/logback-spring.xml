@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+        LOCAL profile: human-readable coloured output for development.
+        Activate with: SPRING_PROFILES_ACTIVE=local
+    -->
+    <springProfile name="local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!--
+        Default (all non-local environments): structured JSON output consumed by CloudWatch.
+        Active whenever SPRING_PROFILES_ACTIVE is not set to 'local' — no env var needed in AWS.
+
+        Each log line is a single-line JSON object. CloudWatch Logs Insights
+        can query any field directly — e.g.:
+            fields @timestamp, level, message, requestId, actorSub, auditAction
+            | filter level = "ERROR"
+            | sort @timestamp desc
+    -->
+    <springProfile name="!local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- Standard fields included in every log line -->
+                <fieldNames>
+                    <timestamp>timestamp</timestamp>
+                    <message>message</message>
+                    <logger>logger</logger>
+                    <thread>thread</thread>
+                    <level>level</level>
+                    <levelValue>[ignore]</levelValue>
+                </fieldNames>
+
+                <!-- App-level fields on every line -->
+                <customFields>{"service":"cognito-rbac","environment":"aws"}</customFields>
+
+                <!-- MDC fields are promoted to top-level JSON fields automatically -->
+                <includeMdc>true</includeMdc>
+
+                <!-- SLF4J key-value pairs (log.atInfo().addKeyValue(...)) promoted too -->
+                <includeKeyValuePairs>true</includeKeyValuePairs>
+
+                <!-- Stack traces as a JSON array, not a multi-line string -->
+                <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                    <maxDepthPerCause>20</maxDepthPerCause>
+                    <shortenedClassNameLength>40</shortenedClassNameLength>
+                    <rootCauseFirst>true</rootCauseFirst>
+                </throwableConverter>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- Package-level overrides apply in both profiles -->
+    <logger name="com.designpattern.cognitorbac" level="INFO"/>
+    <logger name="com.designpattern.cognitorbac.audit" level="DEBUG"/>
+    <logger name="software.amazon.awssdk" level="WARN"/>
+    <logger name="org.springframework.data.mongodb" level="WARN"/>
+
+</configuration>
