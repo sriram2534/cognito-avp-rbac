@@ -28,19 +28,6 @@ cognito:
   admin-group: ${COGNITO_ADMIN_GROUP:rbac-admins}
   default-page-size: 25
 
-# ---------------------------------------------------------------------------
-# AWS Verified Permissions (AVP)
-# ---------------------------------------------------------------------------
-verified-permissions:
-  region: ${AVP_REGION:${COGNITO_REGION:us-east-1}}
-  policy-store-id: ${AVP_POLICY_STORE_ID:}
-  # The Cognito User Pool ARN used to create the identity source in AVP.
-  user-pool-arn: ${COGNITO_USER_POOL_ARN:}
-  # Namespace used in the Cedar schema. All entity types are prefixed with this.
-  namespace: ${AVP_NAMESPACE:Portal}
-  # Super admin group — only this group can create module admins.
-  super-admin-group: ${AVP_SUPER_ADMIN_GROUP:global:global:admin}
-
 # A MongoDB transactional outbox is always written. When the SNS topic is
 # configured, committed records are delivered asynchronously to the topic.
 authorization-events:

@@ -113,7 +113,7 @@ public class GroupService {
             }
             CreateGroupResponse response = cognito.createGroup(builder.build());
             GroupResponse group = mapper.toGroupResponse(response.group());
-            log.info("Cognito role created without AVP policy mutation [roleKey={}]", group.groupName());
+            log.info("Cognito role created [roleKey={}]", group.groupName());
             return group;
         } catch (GroupExistsException ex) {
             throw new ResourceConflictException("Group already exists: " + roleKey);
@@ -139,7 +139,7 @@ public class GroupService {
             }
             UpdateGroupResponse response = cognito.updateGroup(builder.build());
             GroupResponse group = mapper.toGroupResponse(response.group());
-            log.info("Cognito role updated without AVP policy mutation [roleKey={}]", group.groupName());
+            log.info("Cognito role updated [roleKey={}]", group.groupName());
             return group;
         } catch (software.amazon.awssdk.services.cognitoidentityprovider.model.ResourceNotFoundException ex) {
             throw ResourceNotFoundException.group(groupName);
@@ -232,7 +232,7 @@ public class GroupService {
                     .userPoolId(properties.getUserPoolId())
                     .groupName(roleKey)
                     .build());
-            log.info("Cognito role deleted without AVP policy mutation [roleKey={}]", roleKey);
+            log.info("Cognito role deleted [roleKey={}]", roleKey);
         } catch (software.amazon.awssdk.services.cognitoidentityprovider.model.ResourceNotFoundException ex) {
             throw ResourceNotFoundException.group(roleKey);
         } catch (CognitoIdentityProviderException ex) {

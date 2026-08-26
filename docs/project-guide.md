@@ -15,7 +15,7 @@ uses to answer authorization requests.
 | Role permissions | MongoDB `role_permissions` | The relationship from a Cognito role to a permission. |
 | Audit history | MongoDB `audit_entries` | Append-only mutation history. |
 | Event delivery | MongoDB `authorization_outbox`, optional SNS | Transactional outbox, at-least-once delivery. |
-| AVP policies | AWS Verified Permissions | Static/reusable policy infrastructure; legacy CRUD still exists. |
+| Runtime authorization | Downstream authorization service | Makes allow/deny decisions from this service's source data and events. |
 
 ## Domain model and rules
 
@@ -65,11 +65,10 @@ first, then delete the Cognito group.
 
 ## HTTP API
 
-All endpoints except health require a Cognito JWT. Group, user, audit, and
-legacy-policy reads require an authenticated caller. The permission API and all
-current role/permission mutation routes require the configured admin group and
-an `X-Audit-Reason` header. Legacy AVP policy routes have their own older AVP
-authorization rules; do not extend them for new RBAC work.
+All endpoints except health require a Cognito JWT. Group, user, and audit reads
+require an authenticated caller. The permission API and all role/permission
+mutation routes require the configured admin group and an `X-Audit-Reason`
+header.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -95,9 +94,6 @@ authorization rules; do not extend them for new RBAC work.
 | `POST` | `/api/v1/groups/{roleKey}/permissions/{permissionId}` | Grant permission. |
 | `DELETE` | `/api/v1/groups/{roleKey}/permissions/{permissionId}` | Revoke permission. |
 | `GET` | `/api/v1/audit/**` | Search read-only audit history. |
-
-The application also has legacy `/api/v1/policies` and `/api/v1/schema` AVP
-routes. Do not base new role-permission features on them.
 
 ### Headers
 
@@ -207,8 +203,6 @@ credentials.
 | `SPRING_DATA_MONGODB_URI` | Yes | MongoDB connection URI. |
 | `AUTHORIZATION_EVENTS_TOPIC_ARN` | No | Enables SNS outbox publishing. |
 | `AUTHORIZATION_EVENTS_REGION` | No | SNS region; defaults to Cognito region. |
-| `AVP_POLICY_STORE_ID` | Legacy | Required only by the AVP policy/schema APIs. |
-| `COGNITO_USER_POOL_ARN` | Legacy | Required by AVP identity-source operations. |
 
 MongoDB must be a replica set or sharded cluster to support transactions.
 Automatic index creation is enabled in the main configuration. Review indexes
@@ -216,7 +210,7 @@ and deploy them through your normal database change process for production.
 
 The AWS identity used by this service needs Cognito read/write group and user
 membership permissions. An SNS publisher additionally needs `sns:Publish` on
-the configured topic. AVP permissions are necessary only for legacy AVP routes.
+the configured topic.
 
 ## Code map
 
@@ -229,7 +223,6 @@ the configured topic. AVP permissions are necessary only for legacy AVP routes.
 | Event outbox | `outbox/` | Durable events and optional SNS publishing. |
 | AWS/security config | `config/` | Cognito JWT, AWS clients, properties, transactions. |
 | Mapping | `mapper/` | MapStruct API/persistence mapping. |
-| Legacy AVP | `avp/`, `service/*Policy*`, `service/SchemaService` | Existing policy and schema functions. |
 
 ## Error behavior and troubleshooting
 
@@ -249,8 +242,7 @@ Common deployment failures:
 - **SNS pending events:** check the topic ARN, AWS region/credentials, and
   consumer-side event deduplication. Failed records retain attempts and error
   details for retry.
-- **Role validation error:** use lowercase `module:role`, not an old
-  `module:resource:access` group name.
+- **Role validation error:** use lowercase `module:role`.
 
 ## Testing
 

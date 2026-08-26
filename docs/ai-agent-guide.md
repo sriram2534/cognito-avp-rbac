@@ -1,8 +1,8 @@
 # AI agent guide
 
 This guide is the implementation contract for an AI agent or engineer changing
-this repository. Treat the current Java code as authoritative when this guide
-and a legacy document disagree.
+this repository. Treat the current Java code as authoritative when it differs
+from documentation.
 
 ## Mission and architecture
 
@@ -19,9 +19,8 @@ Permission/assignment change
   -> consumer invalidates its effective-permission cache
 ```
 
-The runtime authorization decision belongs to downstream authorization services.
-This project does not dynamically generate AVP policies for the current role-
-permission model.
+The runtime authorization decision belongs to the downstream authorization
+service. This project is the source-data and invalidation-event producer.
 
 ## Non-negotiable invariants
 
@@ -44,8 +43,8 @@ permission model.
    Keep reason, actor, field changes, and correlation ID intact for writes.
 8. **Outbox delivery is at-least-once.** Do not assume exactly-once delivery;
    consumers deduplicate SNS messages using `eventId`.
-9. **Do not couple current RBAC lifecycle operations to AVP policy CRUD.** AVP
-   code is a legacy compatibility boundary until migration is complete.
+9. **Do not add runtime authorization decisions here.** Preserve the clear
+   producer/consumer boundary with the downstream authorization service.
 10. **MapStruct owns DTO/entity conversion.** Add or update mapper methods;
     do not manually construct DTOs or persistence objects in services.
 
@@ -56,8 +55,7 @@ permission model.
 2. Locate the existing vertical slice: controller, service, domain document,
    repository, mapper, audit action, and outbox contract.
 3. Check for existing unrelated work with `git status --short`; preserve it.
-4. Use `rg` for code search. Make focused edits; do not broadly reformat or
-   delete legacy AVP functionality without an explicit migration decision.
+4. Use `rg` for code search. Make focused edits and preserve unrelated work.
 
 ## Change recipes
 
@@ -92,10 +90,9 @@ permission model.
 3. Use `AuditService.recordAuthorizationChange` for permission/relationship
    source mutations. It is intentionally called by the service rather than
    `AuditAspect` to join the same Mongo transaction as source and outbox data.
-4. For a current role/permission endpoint, ensure the controller write requires
-   `X-Audit-Reason`. `AuditContextFilter` supplies actor and correlation
-   information for audited route prefixes. Legacy AVP endpoints have a separate
-   compatibility contract—do not change it incidentally.
+4. Ensure the controller write requires `X-Audit-Reason`.
+   `AuditContextFilter` supplies actor and correlation information for audited
+   route prefixes.
 5. Do not add audit behavior to reads.
 
 ### Add or change an outbox event
@@ -153,14 +150,3 @@ Also verify, in proportion to the change:
   outbox effect if downstream authorization state can change.
 - Transactional source changes still include audit and outbox writes.
 - User-facing docs reflect changed API and event contracts.
-- Existing AVP code remains unaffected unless the task explicitly includes the
-  migration/removal work.
-
-## Known compatibility boundary
-
-`PolicyController`, `SchemaController`, `PolicyService`, `SchemaService`, and
-the `avp/` package support an earlier AVP-centric design whose Cognito group
-format is `module:resource:access`. These pieces remain for cutover safety but
-conflict with the current role format. Do not use that model for new work, and
-do not remove it until the consuming authorization service has deployed and
-verified the structured role-permission flow end to end.

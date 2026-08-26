@@ -1,6 +1,6 @@
 package com.designpattern.cognitorbac.audit;
 
-import com.designpattern.cognitorbac.avp.SecurityContextHelper;
+import com.designpattern.cognitorbac.security.CallerContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,10 +36,10 @@ public class AuditContextFilter extends OncePerRequestFilter {
     );
     private static final Set<String> AUDITED_HTTP_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
-    private final SecurityContextHelper securityContextHelper;
+    private final CallerContext callerContext;
 
-    public AuditContextFilter(SecurityContextHelper securityContextHelper) {
-        this.securityContextHelper = securityContextHelper;
+    public AuditContextFilter(CallerContext callerContext) {
+        this.callerContext = callerContext;
     }
 
     @Override
@@ -63,9 +63,9 @@ public class AuditContextFilter extends OncePerRequestFilter {
         String requestId = correlationId(request);
         try {
             String reason     = request.getHeader(AUDIT_REASON_HEADER);
-            String actorSub   = securityContextHelper.getCallerSub();
+            String actorSub   = callerContext.getCallerSub();
             String actorEmail = resolveEmail();
-            List<String> actorGroups = securityContextHelper.getCallerGroups();
+            List<String> actorGroups = callerContext.getCallerGroups();
 
             MDC.put("requestId", requestId);
             MDC.put("correlationId", requestId);

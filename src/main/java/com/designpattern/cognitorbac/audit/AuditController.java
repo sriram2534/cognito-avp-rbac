@@ -16,8 +16,7 @@ import java.util.List;
 
 /**
  * Read-only REST API for querying audit entries.
- * All endpoints are restricted to authenticated callers; super-admin
- * enforcement can be added via AVP if required.
+ * All endpoints are restricted to authenticated callers.
  */
 @RestController
 @RequestMapping("/api/v1/audit")

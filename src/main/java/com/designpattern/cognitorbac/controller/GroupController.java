@@ -34,7 +34,7 @@ import java.util.List;
  * REST API for managing Cognito groups (RBAC roles) and membership.
  *
  * <p>Cognito groups are coarse application roles. Their permissions are managed
- * separately in MongoDB; group lifecycle never mutates AVP policies.</p>
+ * separately in MongoDB; group lifecycle does not make authorization decisions.</p>
  */
 @RestController
 @RequestMapping("/api/v1/groups")

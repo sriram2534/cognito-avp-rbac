@@ -1,7 +1,6 @@
 package com.designpattern.cognitorbac.exception;
 
 import com.designpattern.cognitorbac.dto.ApiError;
-import com.designpattern.cognitorbac.exception.AuditException;
 import com.designpattern.cognitorbac.audit.AuditContextFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -101,12 +100,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleCognito(CognitoIntegrationException ex, HttpServletRequest request) {
         log.error("Cognito integration failure at {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.BAD_GATEWAY, "Upstream identity provider error", request);
-    }
-
-    @ExceptionHandler(AvpIntegrationException.class)
-    public ResponseEntity<ApiError> handleAvp(AvpIntegrationException ex, HttpServletRequest request) {
-        log.error("AVP integration failure at {} {}", request.getMethod(), request.getRequestURI(), ex);
-        return build(HttpStatus.BAD_GATEWAY, "Upstream authorization service error", request);
     }
 
     @ExceptionHandler(AuditException.class)

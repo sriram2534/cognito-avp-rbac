@@ -5,9 +5,8 @@
 - Cognito owns users, coarse role groups, and user-to-role membership.
 - MongoDB owns reusable permissions, role_permissions, audit entries, and
   authorization invalidation outbox records.
-- AWS Verified Permissions policies are static infrastructure. This service does
-  not create, update, or delete a policy as part of group, permission, or
-  role-permission lifecycle work.
+- The downstream authorization service owns policy evaluation and allow/deny
+  decisions. This service publishes source-data invalidation events only.
 
 The Cognito group name is the role identifier. It must use canonical lowercase
 <module>:<role> form, for example deliveryops:developer. Permission-shaped
@@ -58,10 +57,8 @@ deduplication.
 - PERMISSION_CHANGED supplies all affected active role keys.
 - USER_GROUP_MEMBERSHIP_CHANGED supplies Cognito sub and the changed role.
 
-## Migration safety
+## Integration boundary
 
-The legacy AVP policy endpoints and existing per-group AVP policies remain
-available during cutover, but GroupService no longer invokes them. Do not delete
-legacy AVP policies until nexus-auth-svc has deployed the structured
-IsAuthorized flow, reusable policy schema, effective-permission cache, and
-end-to-end allow/deny verification.
+This service intentionally has no runtime authorization, policy-management, or
+schema-management API. Consumers are responsible for making authorization
+decisions and for de-duplicating invalidation messages using `eventId`.

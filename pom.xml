@@ -83,10 +83,6 @@
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
-            <artifactId>verifiedpermissions</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
             <artifactId>sns</artifactId>
         </dependency>
         <dependency>

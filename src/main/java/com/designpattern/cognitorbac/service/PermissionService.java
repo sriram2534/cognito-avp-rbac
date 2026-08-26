@@ -30,7 +30,7 @@ import java.util.Map;
 
 /**
  * Owns reusable permission documents. Coordinates are immutable because they
- * are the semantic identity used in AVP requests and caches.
+ * are the semantic identity used by downstream authorization consumers and caches.
  */
 @Service
 public class PermissionService {

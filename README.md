@@ -12,9 +12,8 @@ User (Cognito) ──member of──> Role (Cognito group) ──granted──> 
 
 A role is a Cognito group named `module:role`, for example
 `deliveryops:developer`. A permission is an immutable coordinate such as
-`deliveryops:stores:write`. The service does not create an AVP policy when a
-role, permission, or assignment changes; AVP policies are reusable static
-infrastructure.
+`deliveryops:stores:write`. Runtime authorization decisions are delegated to
+the authorization service that consumes this project's source data and events.
 
 ## Documentation
 
@@ -22,10 +21,8 @@ infrastructure.
   operations, and troubleshooting for engineers and operators.
 - [AI agent guide](docs/ai-agent-guide.md) — architecture, invariants,
   change workflows, and verification rules for coding agents.
-- [Role-permission migration](docs/role-permission-migration.md) — cutover
-  scope and compatibility boundary.
-- [Legacy AVP reference](docs/avp-schema-and-policies.md) — historical
-  three-part group/policy implementation; not the model for new features.
+- [Role-permission migration](docs/role-permission-migration.md) — current
+  ownership and event contract.
 
 ## Quick start
 
@@ -103,8 +100,8 @@ See the [project guide](docs/project-guide.md#http-api) for the complete API.
   audit records, and the delivery outbox.
 - **SNS**, when configured, receives asynchronous invalidation events. Its
   consumers must de-duplicate using `eventId` because delivery is at-least-once.
-- **AWS Verified Permissions** remains available for the legacy policy APIs,
-  but no new role-permission lifecycle operation writes an AVP policy.
+- **Authorization service** makes runtime allow/deny decisions from the
+  source data and invalidation events produced by this service.
 
 ## Security and audit
 
