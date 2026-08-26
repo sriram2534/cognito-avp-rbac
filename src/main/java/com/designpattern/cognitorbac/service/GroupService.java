@@ -2,8 +2,6 @@ package com.designpattern.cognitorbac.service;
 
 import com.designpattern.cognitorbac.config.CognitoProperties;
 import com.designpattern.cognitorbac.dto.CreateGroupRequest;
-import com.designpattern.cognitorbac.dto.CreateGroupWithPolicyResponse;
-import com.designpattern.cognitorbac.dto.avp.PolicyResponse;
 import com.designpattern.cognitorbac.dto.GroupResponse;
 import com.designpattern.cognitorbac.dto.PagedResponse;
 import com.designpattern.cognitorbac.dto.UpdateGroupRequest;
@@ -12,6 +10,10 @@ import com.designpattern.cognitorbac.exception.CognitoIntegrationException;
 import com.designpattern.cognitorbac.exception.ResourceConflictException;
 import com.designpattern.cognitorbac.exception.ResourceNotFoundException;
 import com.designpattern.cognitorbac.mapper.CognitoMapper;
+import com.designpattern.cognitorbac.outbox.AuthorizationOutboxService;
+import com.designpattern.cognitorbac.permission.RoleKey;
+import com.designpattern.cognitorbac.permission.RolePermissionRepository;
+import com.designpattern.cognitorbac.permission.RolePermissionStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,7 +32,9 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersIn
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UpdateGroupResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CRUD operations over Cognito groups plus group membership management.
@@ -43,16 +47,21 @@ public class GroupService {
     private final CognitoIdentityProviderClient cognito;
     private final CognitoProperties properties;
     private final CognitoMapper mapper;
-    private final PolicyService policyService;
-
+    private final UserService userService;
+    private final AuthorizationOutboxService outboxService;
+    private final RolePermissionRepository rolePermissions;
     public GroupService(CognitoIdentityProviderClient cognito,
                         CognitoProperties properties,
                         CognitoMapper mapper,
-                        PolicyService policyService) {
+                        UserService userService,
+                        AuthorizationOutboxService outboxService,
+                        RolePermissionRepository rolePermissions) {
         this.cognito = cognito;
         this.properties = properties;
         this.mapper = mapper;
-        this.policyService = policyService;
+        this.userService = userService;
+        this.outboxService = outboxService;
+        this.rolePermissions = rolePermissions;
     }
 
     public PagedResponse<GroupResponse> listGroups(Integer limit, String nextToken) {
@@ -87,45 +96,12 @@ public class GroupService {
         }
     }
 
-    /**
-     * Creates a Cognito group and its corresponding AVP policy atomically.
-     *
-     * <p>Authorization rules enforced upstream by AVP via
-     * {@code AuthorizationService.canManageGroup()}:
-     * <ul>
-     *   <li>{@code global:global:admin} — can create any group (super admin, module admin,
-     *       or resource-level)</li>
-     *   <li>{@code module:global:admin} — can only create resource-level groups within
-     *       their own module (e.g. {@code ops:global:admin} can create {@code ops:store:write})</li>
-     *   <li>All others — denied</li>
-     * </ul>
-     *
-     * <p>If AVP policy creation fails after the Cognito group is created, the group is
-     * rolled back (deleted) to prevent an orphaned group with no access policy.</p>
-     *
-     * @param request the group creation request
-     * @return the created group and its AVP policy
-     */
-    public CreateGroupWithPolicyResponse createGroupWithPolicy(CreateGroupRequest request) {
-        GroupResponse group = createGroup(request);
-
-        try {
-            PolicyResponse policy = policyService.createPolicyForGroup(request.groupName());
-            log.info("Created group [{}] with policy [{}]", request.groupName(), policy.policyId());
-            return new CreateGroupWithPolicyResponse(group, policy);
-        } catch (Exception ex) {
-            log.error("AVP policy creation failed for group [{}], rolling back Cognito group",
-                    request.groupName(), ex);
-            rollbackGroup(request.groupName());
-            throw ex;
-        }
-    }
-
     public GroupResponse createGroup(CreateGroupRequest request) {
+        String roleKey = RoleKey.requireCanonical(request.groupName());
         try {
             var builder = software.amazon.awssdk.services.cognitoidentityprovider.model.CreateGroupRequest.builder()
                     .userPoolId(properties.getUserPoolId())
-                    .groupName(request.groupName());
+                    .groupName(roleKey);
             if (request.description() != null) {
                 builder.description(request.description());
             }
@@ -136,15 +112,18 @@ public class GroupService {
                 builder.roleArn(request.roleArn());
             }
             CreateGroupResponse response = cognito.createGroup(builder.build());
-            return mapper.toGroupResponse(response.group());
+            GroupResponse group = mapper.toGroupResponse(response.group());
+            log.info("Cognito role created without AVP policy mutation [roleKey={}]", group.groupName());
+            return group;
         } catch (GroupExistsException ex) {
-            throw new ResourceConflictException("Group already exists: " + request.groupName());
+            throw new ResourceConflictException("Group already exists: " + roleKey);
         } catch (CognitoIdentityProviderException ex) {
             throw wrap("createGroup", ex);
         }
     }
 
     public GroupResponse updateGroup(String groupName, UpdateGroupRequest request) {
+        groupName = RoleKey.requireCanonical(groupName);
         try {
             var builder = software.amazon.awssdk.services.cognitoidentityprovider.model.UpdateGroupRequest.builder()
                     .userPoolId(properties.getUserPoolId())
@@ -159,7 +138,9 @@ public class GroupService {
                 builder.roleArn(request.roleArn());
             }
             UpdateGroupResponse response = cognito.updateGroup(builder.build());
-            return mapper.toGroupResponse(response.group());
+            GroupResponse group = mapper.toGroupResponse(response.group());
+            log.info("Cognito role updated without AVP policy mutation [roleKey={}]", group.groupName());
+            return group;
         } catch (software.amazon.awssdk.services.cognitoidentityprovider.model.ResourceNotFoundException ex) {
             throw ResourceNotFoundException.group(groupName);
         } catch (CognitoIdentityProviderException ex) {
@@ -168,12 +149,16 @@ public class GroupService {
     }
 
     public void addUserToGroup(String groupName, String username) {
+        groupName = RoleKey.requireCanonical(groupName);
+        String userSub = userService.getUser(username).sub();
         try {
             cognito.adminAddUserToGroup(AdminAddUserToGroupRequest.builder()
                     .userPoolId(properties.getUserPoolId())
                     .groupName(groupName)
                     .username(username)
                     .build());
+            publishMembershipChanged(userSub, groupName, "ADDED");
+            log.info("User added to Cognito role [roleKey={}] [userSub={}]", groupName, userSub);
         } catch (UserNotFoundException ex) {
             throw ResourceNotFoundException.user(username);
         } catch (software.amazon.awssdk.services.cognitoidentityprovider.model.ResourceNotFoundException ex) {
@@ -184,12 +169,16 @@ public class GroupService {
     }
 
     public void removeUserFromGroup(String groupName, String username) {
+        groupName = RoleKey.requireCanonical(groupName);
+        String userSub = userService.getUser(username).sub();
         try {
             cognito.adminRemoveUserFromGroup(AdminRemoveUserFromGroupRequest.builder()
                     .userPoolId(properties.getUserPoolId())
                     .groupName(groupName)
                     .username(username)
                     .build());
+            publishMembershipChanged(userSub, groupName, "REMOVED");
+            log.info("User removed from Cognito role [roleKey={}] [userSub={}]", groupName, userSub);
         } catch (UserNotFoundException ex) {
             throw ResourceNotFoundException.user(username);
         } catch (software.amazon.awssdk.services.cognitoidentityprovider.model.ResourceNotFoundException ex) {
@@ -200,6 +189,7 @@ public class GroupService {
     }
 
     public PagedResponse<UserResponse> listUsersInGroup(String groupName, Integer limit, String nextToken) {
+        groupName = RoleKey.requireCanonical(groupName);
         int pageSize = resolveLimit(limit);
         try {
             ListUsersInGroupRequest.Builder builder = ListUsersInGroupRequest.builder()
@@ -221,17 +211,46 @@ public class GroupService {
         }
     }
 
-    private void rollbackGroup(String groupName) {
+    /** Ensures that a role assignment cannot reference a nonexistent Cognito group. */
+    public GroupResponse requireRole(String roleKey) {
+        return getGroup(RoleKey.requireCanonical(roleKey));
+    }
+
+    /**
+     * A Cognito role may only be removed once its active permission assignments
+     * have been explicitly revoked. This avoids a Cognito/Mongo split-brain
+     * without pretending the two systems participate in one transaction.
+     */
+    public void deleteGroup(String roleKey) {
+        roleKey = RoleKey.requireCanonical(roleKey);
+        if (rolePermissions.countByRoleKeyAndStatus(roleKey, RolePermissionStatus.ACTIVE) > 0) {
+            throw new ResourceConflictException(
+                    "Role has active permissions; revoke them before deleting the Cognito group: " + roleKey);
+        }
         try {
             cognito.deleteGroup(DeleteGroupRequest.builder()
                     .userPoolId(properties.getUserPoolId())
-                    .groupName(groupName)
+                    .groupName(roleKey)
                     .build());
-            log.info("Rolled back Cognito group [{}] after AVP policy failure", groupName);
-        } catch (Exception rollbackEx) {
-            log.error("Failed to roll back Cognito group [{}] — manual cleanup required",
-                    groupName, rollbackEx);
+            log.info("Cognito role deleted without AVP policy mutation [roleKey={}]", roleKey);
+        } catch (software.amazon.awssdk.services.cognitoidentityprovider.model.ResourceNotFoundException ex) {
+            throw ResourceNotFoundException.group(roleKey);
+        } catch (CognitoIdentityProviderException ex) {
+            throw wrap("deleteGroup", ex);
         }
+    }
+
+    private void publishMembershipChanged(String sub, String roleKey, String operation) {
+        outboxService.enqueue("USER_GROUP_MEMBERSHIP_CHANGED", sub, Map.of(
+                "eventVersion", 1,
+                "eventType", "USER_GROUP_MEMBERSHIP_CHANGED",
+                "sub", sub,
+                "roleKey", roleKey,
+                "operation", operation,
+                "correlationId", PermissionService.correlationId(),
+                "occurredAt", Instant.now().toString()));
+        log.debug("User-role membership invalidation prepared [userSub={}] [roleKey={}] [operation={}]",
+                sub, roleKey, operation);
     }
 
     private int resolveLimit(Integer limit) {

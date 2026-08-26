@@ -16,6 +16,10 @@ public class AuditFilter {
     private final String targetUsername;
     private final String actorSub;
     private final String actorEmail;
+    private final String roleKey;
+    private final String permissionId;
+    private final String aggregateType;
+    private final String aggregateId;
     private final List<AuditAction> actions;
     private final String changedField;
     private final Instant from;
@@ -26,6 +30,10 @@ public class AuditFilter {
         this.targetUsername = b.targetUsername;
         this.actorSub       = b.actorSub;
         this.actorEmail     = b.actorEmail;
+        this.roleKey        = b.roleKey;
+        this.permissionId   = b.permissionId;
+        this.aggregateType  = b.aggregateType;
+        this.aggregateId    = b.aggregateId;
         this.actions        = b.actions;
         this.changedField   = b.changedField;
         this.from           = b.from;
@@ -38,6 +46,10 @@ public class AuditFilter {
     public String getTargetUsername() { return targetUsername; }
     public String getActorSub()       { return actorSub; }
     public String getActorEmail()     { return actorEmail; }
+    public String getRoleKey()        { return roleKey; }
+    public String getPermissionId()   { return permissionId; }
+    public String getAggregateType()  { return aggregateType; }
+    public String getAggregateId()    { return aggregateId; }
     public List<AuditAction> getActions() { return actions; }
     public String getChangedField()   { return changedField; }
     public Instant getFrom()          { return from; }
@@ -48,6 +60,10 @@ public class AuditFilter {
         private String targetUsername;
         private String actorSub;
         private String actorEmail;
+        private String roleKey;
+        private String permissionId;
+        private String aggregateType;
+        private String aggregateId;
         private List<AuditAction> actions;
         private String changedField;
         private Instant from;
@@ -57,6 +73,10 @@ public class AuditFilter {
         public Builder targetUsername(String v) { this.targetUsername = v; return this; }
         public Builder actorSub(String v)       { this.actorSub = v; return this; }
         public Builder actorEmail(String v)     { this.actorEmail = v; return this; }
+        public Builder roleKey(String v)        { this.roleKey = v; return this; }
+        public Builder permissionId(String v)   { this.permissionId = v; return this; }
+        public Builder aggregateType(String v)  { this.aggregateType = v; return this; }
+        public Builder aggregateId(String v)    { this.aggregateId = v; return this; }
         public Builder actions(List<AuditAction> v) { this.actions = v; return this; }
         public Builder changedField(String v)   { this.changedField = v; return this; }
         public Builder from(Instant v)          { this.from = v; return this; }

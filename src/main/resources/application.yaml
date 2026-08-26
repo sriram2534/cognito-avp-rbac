@@ -1,6 +1,9 @@
 spring:
   application:
     name: cognito-rbac
+  data:
+    mongodb:
+      auto-index-creation: true
 
 server:
   port: 8080
@@ -37,6 +40,13 @@ verified-permissions:
   namespace: ${AVP_NAMESPACE:Portal}
   # Super admin group — only this group can create module admins.
   super-admin-group: ${AVP_SUPER_ADMIN_GROUP:global:global:admin}
+
+# A MongoDB transactional outbox is always written. When the SNS topic is
+# configured, committed records are delivered asynchronously to the topic.
+authorization-events:
+  topic-arn: ${AUTHORIZATION_EVENTS_TOPIC_ARN:}
+  region: ${AUTHORIZATION_EVENTS_REGION:${COGNITO_REGION:us-east-1}}
+  publish-interval-ms: ${AUTHORIZATION_EVENTS_PUBLISH_INTERVAL_MS:1000}
 
 management:
   endpoints:

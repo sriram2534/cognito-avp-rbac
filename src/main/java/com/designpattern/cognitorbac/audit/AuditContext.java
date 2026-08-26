@@ -19,16 +19,20 @@ public final class AuditContext {
     private final String actorEmail;
     private final List<String> actorGroups;
     private final String reason;
+    private final String correlationId;
 
-    private AuditContext(String actorSub, String actorEmail, List<String> actorGroups, String reason) {
+    private AuditContext(String actorSub, String actorEmail, List<String> actorGroups, String reason,
+                         String correlationId) {
         this.actorSub = actorSub;
         this.actorEmail = actorEmail;
         this.actorGroups = actorGroups;
         this.reason = reason;
+        this.correlationId = correlationId;
     }
 
-    public static void set(String actorSub, String actorEmail, List<String> actorGroups, String reason) {
-        HOLDER.set(new AuditContext(actorSub, actorEmail, actorGroups, reason));
+    public static void set(String actorSub, String actorEmail, List<String> actorGroups, String reason,
+                           String correlationId) {
+        HOLDER.set(new AuditContext(actorSub, actorEmail, actorGroups, reason, correlationId));
     }
 
     public static AuditContext current() {
@@ -43,4 +47,5 @@ public final class AuditContext {
     public String getActorEmail() { return actorEmail; }
     public List<String> getActorGroups() { return actorGroups; }
     public String getReason() { return reason; }
+    public String getCorrelationId() { return correlationId; }
 }

@@ -1,4 +1,12 @@
-# AWS Verified Permissions — Schema & Policies Reference
+# AWS Verified Permissions — Legacy Schema & Policies Reference
+
+> **Status: legacy compatibility reference.** This document describes the
+> earlier AVP-centric design where Cognito group names used
+> `module:resource:access`. The current RBAC model uses Cognito roles named
+> `module:role` and MongoDB-managed permissions/role assignments. Do not use
+> this document to design new role-permission features; start with the
+> [project guide](project-guide.md) and
+> [AI agent guide](ai-agent-guide.md) instead.
 
 ## Overview
 

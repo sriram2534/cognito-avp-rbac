@@ -5,3 +5,13 @@ cognito:
   source-group: azure-ad-users
   admin-group: rbac-admins
   default-page-size: 25
+
+verified-permissions:
+  region: us-east-1
+  policy-store-id: test-policy-store
+  namespace: NexusUserGroup
+
+spring:
+  data:
+    mongodb:
+      auto-index-creation: false

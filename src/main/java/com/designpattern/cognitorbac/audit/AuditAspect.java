@@ -28,12 +28,14 @@ public class AuditAspect {
     private static final Logger log = LoggerFactory.getLogger(AuditAspect.class);
 
     private final AuditService auditService;
+    private final FieldChangeMapper fieldChangeMapper;
 
-    public AuditAspect(AuditService auditService) {
+    public AuditAspect(AuditService auditService, FieldChangeMapper fieldChangeMapper) {
         this.auditService = auditService;
+        this.fieldChangeMapper = fieldChangeMapper;
     }
 
-    @AfterReturning("execution(* com.designpattern.cognitorbac.service.GroupService.createGroupWithPolicy(..))")
+    @AfterReturning("execution(* com.designpattern.cognitorbac.service.GroupService.createGroup(..))")
     public void onGroupCreated(JoinPoint jp) {
         try {
             CreateGroupRequest request = (CreateGroupRequest) jp.getArgs()[0];
@@ -51,6 +53,15 @@ public class AuditAspect {
             auditService.record(AuditAction.GROUP_UPDATED, groupName, null, buildUpdateChanges(request));
         } catch (Exception ex) {
             log.error("Audit aspect failed on GROUP_UPDATED — business operation unaffected", ex);
+        }
+    }
+
+    @AfterReturning("execution(* com.designpattern.cognitorbac.service.GroupService.deleteGroup(..))")
+    public void onGroupDeleted(JoinPoint jp) {
+        try {
+            auditService.record(AuditAction.GROUP_DELETED, (String) jp.getArgs()[0]);
+        } catch (Exception ex) {
+            log.error("Audit aspect failed on GROUP_DELETED — business operation unaffected", ex);
         }
     }
 
@@ -79,11 +90,11 @@ public class AuditAspect {
     private List<FieldChange> buildUpdateChanges(UpdateGroupRequest request) {
         List<FieldChange> changes = new ArrayList<>();
         if (request.description() != null)
-            changes.add(new FieldChange("description", null, request.description()));
+            changes.add(fieldChangeMapper.toFieldChange("description", null, request.description()));
         if (request.precedence() != null)
-            changes.add(new FieldChange("precedence", null, request.precedence()));
+            changes.add(fieldChangeMapper.toFieldChange("precedence", null, request.precedence()));
         if (request.roleArn() != null)
-            changes.add(new FieldChange("roleArn", null, request.roleArn()));
+            changes.add(fieldChangeMapper.toFieldChange("roleArn", null, request.roleArn()));
         return changes;
     }
 }

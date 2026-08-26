@@ -7,6 +7,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,9 +24,11 @@ public class AuditService {
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
 
     private final AuditEntryRepository repository;
+    private final AuditEntryMapper auditEntryMapper;
 
-    public AuditService(AuditEntryRepository repository) {
+    public AuditService(AuditEntryRepository repository, AuditEntryMapper auditEntryMapper) {
         this.repository = repository;
+        this.auditEntryMapper = auditEntryMapper;
     }
 
     /**
@@ -45,15 +48,7 @@ public class AuditService {
             if (ctx == null) {
                 log.warn("AuditContext missing — AuditContextFilter may have been bypassed");
             }
-            AuditEntry entry = AuditEntry.builder(action)
-                    .groupName(groupName)
-                    .targetUsername(targetUsername)
-                    .actorSub(ctx != null ? ctx.getActorSub() : null)
-                    .actorEmail(ctx != null ? ctx.getActorEmail() : null)
-                    .actorGroups(ctx != null ? ctx.getActorGroups() : List.of())
-                    .reason(ctx != null ? ctx.getReason() : null)
-                    .changes(changes)
-                    .build();
+            AuditEntry entry = auditEntryMapper.toLegacyEntry(action, groupName, targetUsername, ctx, changes);
             repository.save(entry);
             log.debug("Audit entry persisted: groupName={} targetUsername={} changesCount={}",
                     groupName, targetUsername, changes.size());
@@ -72,6 +67,24 @@ public class AuditService {
 
     public void record(AuditAction action, String groupName, String targetUsername) {
         record(action, groupName, targetUsername, List.of());
+    }
+
+    /**
+     * Required audit write for authorization-source mutations. Unlike legacy
+     * best-effort group audit, this participates in the caller's MongoDB
+     * transaction so a permission relationship never succeeds without audit.
+     */
+    @Transactional
+    public void recordAuthorizationChange(AuditAction action, String aggregateType, String aggregateId,
+                                          String roleKey, String permissionId,
+                                          List<FieldChange> changes) {
+        AuditContext ctx = AuditContext.current();
+        AuditEntry entry = auditEntryMapper.toAuthorizationEntry(
+                action, aggregateType, aggregateId, roleKey, permissionId, ctx, changes);
+        repository.save(entry);
+        log.info("Authorization source audited [action={}] [aggregateType={}] [aggregateId={}] "
+                        + "[roleKey={}] [permissionId={}]",
+                action, aggregateType, aggregateId, roleKey, permissionId);
     }
 
     // ─── Query API ───────────────────────────────────────────────────────────────

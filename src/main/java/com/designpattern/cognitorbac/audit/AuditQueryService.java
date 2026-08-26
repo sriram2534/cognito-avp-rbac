@@ -89,6 +89,18 @@ public class AuditQueryService {
         if (f.getActorEmail() != null && !f.getActorEmail().isBlank()) {
             criteria.add(Criteria.where("actor_email").is(f.getActorEmail()));
         }
+        if (f.getRoleKey() != null && !f.getRoleKey().isBlank()) {
+            criteria.add(Criteria.where("role_key").is(f.getRoleKey()));
+        }
+        if (f.getPermissionId() != null && !f.getPermissionId().isBlank()) {
+            criteria.add(Criteria.where("permission_id").is(f.getPermissionId()));
+        }
+        if (f.getAggregateType() != null && !f.getAggregateType().isBlank()) {
+            criteria.add(Criteria.where("aggregate_type").is(f.getAggregateType()));
+        }
+        if (f.getAggregateId() != null && !f.getAggregateId().isBlank()) {
+            criteria.add(Criteria.where("aggregate_id").is(f.getAggregateId()));
+        }
         if (f.getActions() != null && !f.getActions().isEmpty()) {
             criteria.add(Criteria.where("action").in(f.getActions()));
         }

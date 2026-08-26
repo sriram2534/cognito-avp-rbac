@@ -53,6 +53,10 @@ public class AuditController {
             @RequestParam(required = false) String targetUsername,
             @RequestParam(required = false) String actorSub,
             @RequestParam(required = false) String actorEmail,
+            @RequestParam(required = false) String roleKey,
+            @RequestParam(required = false) String permissionId,
+            @RequestParam(required = false) String aggregateType,
+            @RequestParam(required = false) String aggregateId,
             @RequestParam(required = false) List<AuditAction> actions,
             @RequestParam(required = false) String changedField,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
@@ -65,6 +69,10 @@ public class AuditController {
                 .targetUsername(targetUsername)
                 .actorSub(actorSub)
                 .actorEmail(actorEmail)
+                .roleKey(roleKey)
+                .permissionId(permissionId)
+                .aggregateType(aggregateType)
+                .aggregateId(aggregateId)
                 .actions(actions)
                 .changedField(changedField)
                 .from(from)

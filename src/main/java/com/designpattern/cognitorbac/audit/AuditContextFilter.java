@@ -27,8 +27,10 @@ import java.util.UUID;
 public class AuditContextFilter extends OncePerRequestFilter {
 
     public static final String AUDIT_REASON_HEADER = "X-Audit-Reason";
+    public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     private static final Set<String> AUDITED_API_PREFIXES = Set.of(
             "/api/v1/groups",
+            "/api/v1/permissions",
             "/api/v1/policies",
             "/api/v1/users"
     );
@@ -58,14 +60,15 @@ public class AuditContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String requestId = UUID.randomUUID().toString();
+        String requestId = correlationId(request);
         try {
             String reason     = request.getHeader(AUDIT_REASON_HEADER);
             String actorSub   = securityContextHelper.getCallerSub();
             String actorEmail = resolveEmail();
             List<String> actorGroups = securityContextHelper.getCallerGroups();
 
-            MDC.put("requestId",  requestId);
+            MDC.put("requestId", requestId);
+            MDC.put("correlationId", requestId);
             MDC.put("actorSub",   actorSub   != null ? actorSub   : "anonymous");
             MDC.put("actorEmail", actorEmail != null ? actorEmail : "unknown");
             MDC.put("httpMethod", request.getMethod());
@@ -73,12 +76,27 @@ public class AuditContextFilter extends OncePerRequestFilter {
 
             response.setHeader("X-Request-Id", requestId);
 
-            AuditContext.set(actorSub, actorEmail, actorGroups, reason);
+            // The request ID is the correlation ID for this service. It is also
+            // returned to callers, so audit/outbox records can be correlated.
+            AuditContext.set(actorSub, actorEmail, actorGroups, reason, requestId);
             filterChain.doFilter(request, response);
         } finally {
             AuditContext.clear();
-            MDC.clear();
+            MDC.remove("requestId");
+            MDC.remove("correlationId");
+            MDC.remove("actorSub");
+            MDC.remove("actorEmail");
+            MDC.remove("httpMethod");
+            MDC.remove("httpPath");
         }
+    }
+
+    private String correlationId(HttpServletRequest request) {
+        String inbound = request.getHeader(CORRELATION_ID_HEADER);
+        if (inbound != null && inbound.matches("[A-Za-z0-9._-]{1,128}")) {
+            return inbound;
+        }
+        return UUID.randomUUID().toString();
     }
 
     private String resolveEmail() {

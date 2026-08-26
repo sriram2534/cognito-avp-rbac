@@ -2,19 +2,18 @@ package com.designpattern.cognitorbac.controller;
 
 import com.designpattern.cognitorbac.dto.AddUsersToGroupRequest;
 import com.designpattern.cognitorbac.dto.CreateGroupRequest;
-import com.designpattern.cognitorbac.dto.CreateGroupWithPolicyResponse;
 import com.designpattern.cognitorbac.dto.GroupResponse;
 import com.designpattern.cognitorbac.dto.PagedResponse;
 import com.designpattern.cognitorbac.dto.UpdateGroupRequest;
 import com.designpattern.cognitorbac.dto.UserResponse;
 import com.designpattern.cognitorbac.audit.AuditContextFilter;
-import com.designpattern.cognitorbac.avp.SecurityContextHelper;
-import com.designpattern.cognitorbac.service.AuthorizationService;
 import com.designpattern.cognitorbac.service.GroupService;
+import com.designpattern.cognitorbac.service.RolePermissionService;
+import com.designpattern.cognitorbac.dto.PermissionResponse;
+import com.designpattern.cognitorbac.dto.RolePermissionResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,14 +28,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
+import java.util.List;
 
 /**
  * REST API for managing Cognito groups (RBAC roles) and membership.
  *
- * <p>Read operations require any authenticated caller; write operations
- * (create/update group, add/remove members) are authorized by AVP, which
- * derives the caller's groups from the identity token and evaluates the
- * Cedar policies for the target group.</p>
+ * <p>Cognito groups are coarse application roles. Their permissions are managed
+ * separately in MongoDB; group lifecycle never mutates AVP policies.</p>
  */
 @RestController
 @RequestMapping("/api/v1/groups")
@@ -44,15 +42,11 @@ import java.net.URI;
 public class GroupController {
 
     private final GroupService groupService;
-    private final AuthorizationService authorizationService;
-    private final SecurityContextHelper securityContextHelper;
+    private final RolePermissionService rolePermissionService;
 
-    public GroupController(GroupService groupService,
-                           AuthorizationService authorizationService,
-                           SecurityContextHelper securityContextHelper) {
+    public GroupController(GroupService groupService, RolePermissionService rolePermissionService) {
         this.groupService = groupService;
-        this.authorizationService = authorizationService;
-        this.securityContextHelper = securityContextHelper;
+        this.rolePermissionService = rolePermissionService;
     }
 
     @GetMapping
@@ -67,36 +61,33 @@ public class GroupController {
         return ResponseEntity.ok(groupService.getGroup(groupName));
     }
 
-    /**
-     * Creates a Cognito group and its AVP policy in a single atomic operation.
-     *
-     * <p>Authorization is enforced by AVP based on the target group name:
-     * <ul>
-     *   <li>{@code global:global:admin} — can create any group type</li>
-     *   <li>{@code module:global:admin} — can only create resource-level groups
-     *       within their own module</li>
-     *   <li>All others — denied (403)</li>
-     * </ul>
-     */
     @PostMapping
-    public ResponseEntity<CreateGroupWithPolicyResponse> createGroup(
+    @PreAuthorize("hasRole(@rbac.adminRole)")
+    public ResponseEntity<GroupResponse> createGroup(
             @Valid @RequestBody CreateGroupRequest request,
             @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason,
             UriComponentsBuilder uriBuilder) {
-        authorizeGroupManagement(request.groupName());
-        CreateGroupWithPolicyResponse created = groupService.createGroupWithPolicy(request);
+        GroupResponse created = groupService.createGroup(request);
         URI location = uriBuilder.path("/api/v1/groups/{groupName}")
-                .buildAndExpand(created.group().groupName())
+                .buildAndExpand(created.groupName())
                 .toUri();
         return ResponseEntity.created(location).body(created);
     }
 
     @PutMapping("/{groupName}")
+    @PreAuthorize("hasRole(@rbac.adminRole)")
     public ResponseEntity<GroupResponse> updateGroup(@PathVariable String groupName,
                                                      @Valid @RequestBody UpdateGroupRequest request,
                                                      @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
-        authorizeGroupManagement(groupName);
         return ResponseEntity.ok(groupService.updateGroup(groupName, request));
+    }
+
+    @DeleteMapping("/{groupName}")
+    @PreAuthorize("hasRole(@rbac.adminRole)")
+    public ResponseEntity<Void> deleteGroup(@PathVariable String groupName,
+                                            @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
+        groupService.deleteGroup(groupName);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{groupName}/users")
@@ -108,35 +99,42 @@ public class GroupController {
     }
 
     @PostMapping("/{groupName}/users")
+    @PreAuthorize("hasRole(@rbac.adminRole)")
     public ResponseEntity<Void> addUsersToGroup(@PathVariable String groupName,
                                                 @Valid @RequestBody AddUsersToGroupRequest request,
                                                 @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
-        authorizeGroupManagement(groupName);
         request.usernames().forEach(username -> groupService.addUserToGroup(groupName, username));
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
     @DeleteMapping("/{groupName}/users/{username}")
+    @PreAuthorize("hasRole(@rbac.adminRole)")
     public ResponseEntity<Void> removeUserFromGroup(@PathVariable String groupName,
                                                     @PathVariable String username,
                                                     @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
-        authorizeGroupManagement(groupName);
         groupService.removeUserFromGroup(groupName, username);
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Authorizes a group-management operation via AVP. AVP derives the caller's
-     * group membership from the identity token and evaluates the Cedar policies:
-     * module-admin groups are restricted to super admins, resource groups to the
-     * owning module admin.
-     *
-     * @throws AccessDeniedException if AVP returns DENY
-     */
-    private void authorizeGroupManagement(String groupName) {
-        String identityToken = securityContextHelper.getIdentityToken();
-        if (identityToken == null || !authorizationService.canManageGroup(identityToken, groupName)) {
-            throw new AccessDeniedException("Not authorized to manage group: " + groupName);
-        }
+    @PostMapping("/{groupName}/permissions/{permissionId}")
+    @PreAuthorize("hasRole(@rbac.adminRole)")
+    public ResponseEntity<RolePermissionResponse> grantPermission(@PathVariable String groupName,
+                                                                   @PathVariable String permissionId,
+                                                                   @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(rolePermissionService.grant(groupName, permissionId));
+    }
+
+    @DeleteMapping("/{groupName}/permissions/{permissionId}")
+    @PreAuthorize("hasRole(@rbac.adminRole)")
+    public ResponseEntity<Void> revokePermission(@PathVariable String groupName,
+                                                  @PathVariable String permissionId,
+                                                  @RequestHeader(AuditContextFilter.AUDIT_REASON_HEADER) String auditReason) {
+        rolePermissionService.revoke(groupName, permissionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{groupName}/permissions")
+    public List<PermissionResponse> permissions(@PathVariable String groupName) {
+        return rolePermissionService.permissionsForRole(groupName);
     }
 }

@@ -1,5 +1,6 @@
 package com.designpattern.cognitorbac.audit;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -39,6 +40,22 @@ public class AuditEntry {
     @Field("target_username")
     private String targetUsername;
 
+    @Indexed
+    @Field("aggregate_type")
+    private String aggregateType;
+
+    @Indexed
+    @Field("aggregate_id")
+    private String aggregateId;
+
+    @Indexed
+    @Field("role_key")
+    private String roleKey;
+
+    @Indexed
+    @Field("permission_id")
+    private String permissionId;
+
     @Field("actor_sub")
     @Indexed
     private String actorSub;
@@ -51,6 +68,10 @@ public class AuditEntry {
 
     @Field("reason")
     private String reason;
+
+    @Indexed
+    @Field("correlation_id")
+    private String correlationId;
 
     @Indexed
     @Field("occurred_at")
@@ -66,41 +87,66 @@ public class AuditEntry {
         this.action = builder.action;
         this.groupName = builder.groupName;
         this.targetUsername = builder.targetUsername;
+        this.aggregateType = builder.aggregateType;
+        this.aggregateId = builder.aggregateId;
+        this.roleKey = builder.roleKey;
+        this.permissionId = builder.permissionId;
         this.actorSub = builder.actorSub;
         this.actorEmail = builder.actorEmail;
         this.actorGroups = builder.actorGroups;
         this.reason = builder.reason;
+        this.correlationId = builder.correlationId;
         this.occurredAt = Instant.now();
         this.changes = builder.changes;
     }
 
-    public static Builder builder(AuditAction action) {
-        return new Builder(action);
+    public static Builder builder() {
+        return new Builder();
     }
 
+    public static Builder builder(AuditAction action) {
+        return builder().action(action);
+    }
+
+    /** MongoDB's internal identifier is intentionally not part of the public audit API. */
+    @JsonIgnore
     public String getId() { return id; }
     public AuditAction getAction() { return action; }
     public String getGroupName() { return groupName; }
     public String getTargetUsername() { return targetUsername; }
+    public String getAggregateType() { return aggregateType; }
+    public String getAggregateId() { return aggregateId; }
+    public String getRoleKey() { return roleKey; }
+    public String getPermissionId() { return permissionId; }
     public String getActorSub() { return actorSub; }
     public String getActorEmail() { return actorEmail; }
     public java.util.List<String> getActorGroups() { return actorGroups; }
     public String getReason() { return reason; }
+    public String getCorrelationId() { return correlationId; }
     public Instant getOccurredAt() { return occurredAt; }
     public List<FieldChange> getChanges() { return changes; }
 
     public static final class Builder {
-        private final AuditAction action;
+        private AuditAction action;
         private String groupName;
         private String targetUsername;
+        private String aggregateType;
+        private String aggregateId;
+        private String roleKey;
+        private String permissionId;
         private String actorSub;
         private String actorEmail;
         private java.util.List<String> actorGroups;
         private String reason;
+        private String correlationId;
         private List<FieldChange> changes;
 
-        private Builder(AuditAction action) {
+        private Builder() {
+        }
+
+        public Builder action(AuditAction action) {
             this.action = action;
+            return this;
         }
 
         public Builder groupName(String groupName) {
@@ -110,6 +156,26 @@ public class AuditEntry {
 
         public Builder targetUsername(String targetUsername) {
             this.targetUsername = targetUsername;
+            return this;
+        }
+
+        public Builder aggregateType(String aggregateType) {
+            this.aggregateType = aggregateType;
+            return this;
+        }
+
+        public Builder aggregateId(String aggregateId) {
+            this.aggregateId = aggregateId;
+            return this;
+        }
+
+        public Builder roleKey(String roleKey) {
+            this.roleKey = roleKey;
+            return this;
+        }
+
+        public Builder permissionId(String permissionId) {
+            this.permissionId = permissionId;
             return this;
         }
 
@@ -130,6 +196,11 @@ public class AuditEntry {
 
         public Builder reason(String reason) {
             this.reason = reason;
+            return this;
+        }
+
+        public Builder correlationId(String correlationId) {
+            this.correlationId = correlationId;
             return this;
         }
 
