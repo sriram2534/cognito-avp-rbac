@@ -81,7 +81,7 @@ public class AuditAspect {
         if (request.description() != null)
             changes.add(new FieldChange("description", null, request.description()));
         if (request.precedence() != null)
-            changes.add(new FieldChange("precedence", null, String.valueOf(request.precedence())));
+            changes.add(new FieldChange("precedence", null, request.precedence()));
         if (request.roleArn() != null)
             changes.add(new FieldChange("roleArn", null, request.roleArn()));
         return changes;

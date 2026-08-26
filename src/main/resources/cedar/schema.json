@@ -79,19 +79,6 @@
           }
         }
       },
-      "Publish": {
-        "memberOf": [
-          { "id": "Read", "type": "Portal::Action" }
-        ],
-        "appliesTo": {
-          "principalTypes": ["User", "Group"],
-          "resourceTypes": ["Resource"],
-          "context": {
-            "type": "Record",
-            "attributes": {}
-          }
-        }
-      },
       "Export": {
         "memberOf": [
           { "id": "Read", "type": "Portal::Action" }
@@ -107,7 +94,7 @@
       },
       "Approve": {
         "memberOf": [
-          { "id": "Read", "type": "Portal::Action" }
+          { "id": "Write", "type": "Portal::Action" }
         ],
         "appliesTo": {
           "principalTypes": ["User", "Group"],
@@ -121,7 +108,6 @@
       "Admin": {
         "memberOf": [
           { "id": "Write", "type": "Portal::Action" },
-          { "id": "Publish", "type": "Portal::Action" },
           { "id": "Export", "type": "Portal::Action" },
           { "id": "Approve", "type": "Portal::Action" }
         ],

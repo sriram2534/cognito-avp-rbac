@@ -11,6 +11,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -26,11 +27,31 @@ import java.util.UUID;
 public class AuditContextFilter extends OncePerRequestFilter {
 
     public static final String AUDIT_REASON_HEADER = "X-Audit-Reason";
+    private static final Set<String> AUDITED_API_PREFIXES = Set.of(
+            "/api/v1/groups",
+            "/api/v1/policies",
+            "/api/v1/users"
+    );
+    private static final Set<String> AUDITED_HTTP_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
     private final SecurityContextHelper securityContextHelper;
 
     public AuditContextFilter(SecurityContextHelper securityContextHelper) {
         this.securityContextHelper = securityContextHelper;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        if (!AUDITED_HTTP_METHODS.contains(request.getMethod())) {
+            return true;
+        }
+
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)) {
+            path = path.substring(contextPath.length());
+        }
+        return AUDITED_API_PREFIXES.stream().noneMatch(path::startsWith);
     }
 
     @Override
