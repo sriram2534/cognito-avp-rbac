@@ -13,10 +13,10 @@ public interface RolePermissionMapper {
 
     RolePermissionResponse toResponse(RolePermission rolePermission);
 
-    RolePermission toEntity(String roleKey, String permissionId, String actorSub);
+    RolePermission toEntity(String roleId, String permissionId, String actorSub);
 
     @ObjectFactory
-    default RolePermission createRolePermission(String roleKey, String permissionId, String actorSub) {
-        return new RolePermission(roleKey, permissionId, actorSub);
+    default RolePermission createRolePermission(String roleId, String permissionId, String actorSub) {
+        return new RolePermission(roleId, permissionId, actorSub);
     }
 }

@@ -28,19 +28,18 @@ public class UserController {
     }
 
     /**
-     * Lists the application's users: the members of the Azure-managed source
-     * group configured via {@code cognito.source-group}.
+     * Lists users from the configured Cognito user pool.
      *
      * @param limit         optional page size (max 60)
      * @param nextToken     optional opaque cursor from a previous page
-     * @param includeGroups when true, resolves each user's groups (extra cost)
+     * @param includeRoles when true, resolves each user's Nexus roles (extra cost)
      */
     @GetMapping
     public PagedResponse<UserResponse> listUsers(
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) String nextToken,
-            @RequestParam(defaultValue = "false") boolean includeGroups) {
-        return userService.listUsers(limit, nextToken, includeGroups);
+            @RequestParam(defaultValue = "false") boolean includeRoles) {
+        return userService.listUsers(limit, nextToken, includeRoles);
     }
 
     /**

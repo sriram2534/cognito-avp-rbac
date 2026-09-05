@@ -38,9 +38,8 @@ public class AuditController {
      *
      * <p>Examples:
      * <pre>
-     *   GET /api/v1/audit/search?groupName=ops:store:write
-     *   GET /api/v1/audit/search?actorSub=uuid-123&actions=GROUP_CREATED,GROUP_UPDATED
-     *   GET /api/v1/audit/search?groupName=ops:store:write&targetUsername=alice
+     *   GET /api/v1/audit/search?roleKey=ops:developer
+     *   GET /api/v1/audit/search?actorSub=uuid-123&actions=ROLE_CREATED,ROLE_UPDATED
      *   GET /api/v1/audit/search?changedField=email&from=2026-08-01T00:00:00Z
      *   GET /api/v1/audit/search?actions=USER_DISABLED,USER_ENABLED&from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z
      * </pre>
@@ -48,8 +47,6 @@ public class AuditController {
      */
     @GetMapping("/search")
     public Page<AuditEntry> search(
-            @RequestParam(required = false) String groupName,
-            @RequestParam(required = false) String targetUsername,
             @RequestParam(required = false) String actorSub,
             @RequestParam(required = false) String actorEmail,
             @RequestParam(required = false) String roleKey,
@@ -64,8 +61,6 @@ public class AuditController {
             @RequestParam(defaultValue = "20") int size) {
 
         AuditFilter filter = AuditFilter.builder()
-                .groupName(groupName)
-                .targetUsername(targetUsername)
                 .actorSub(actorSub)
                 .actorEmail(actorEmail)
                 .roleKey(roleKey)
@@ -83,11 +78,11 @@ public class AuditController {
     }
 
     /**
-     * Returns paginated audit history for a specific group.
+     * Returns paginated audit history for a specific role key.
      */
-    @GetMapping("/groups/{groupName}")
-    public Page<AuditEntry> byGroup(
-            @PathVariable String groupName,
+    @GetMapping("/roles/{roleKey}")
+    public Page<AuditEntry> byRole(
+            @PathVariable String roleKey,
             @RequestParam(required = false) AuditAction action,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -95,17 +90,18 @@ public class AuditController {
         PageRequest pageable = PageRequest.of(page, clamp(size), Sort.by(Sort.Direction.DESC, "occurred_at"));
 
         if (action != null) {
-            return auditService.findByGroupAndAction(groupName, action, pageable);
+            return queryService.search(AuditFilter.builder().roleKey(roleKey).actions(List.of(action)).build(), pageable);
         }
-        return auditService.findByGroup(groupName, pageable);
+        return queryService.search(AuditFilter.builder().roleKey(roleKey).build(), pageable);
     }
 
     /**
-     * Returns the 50 most recent audit entries for a group (convenience endpoint).
+     * Returns the 50 most recent audit entries for a role (convenience endpoint).
      */
-    @GetMapping("/groups/{groupName}/recent")
-    public List<AuditEntry> recentByGroup(@PathVariable String groupName) {
-        return auditService.recentForGroup(groupName);
+    @GetMapping("/roles/{roleKey}/recent")
+    public List<AuditEntry> recentByRole(@PathVariable String roleKey) {
+        return queryService.search(AuditFilter.builder().roleKey(roleKey).build(),
+                PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "occurred_at"))).getContent();
     }
 
     /**

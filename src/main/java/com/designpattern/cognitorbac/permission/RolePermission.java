@@ -9,16 +9,16 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-/** Relationship between a Cognito role (group) and a reusable permission. */
-@Document(collection = "role_permissions")
-@CompoundIndex(name = "ux_role_permission", def = "{'roleKey': 1, 'permissionId': 1}", unique = true)
-@CompoundIndex(name = "ix_role_permissions_by_role", def = "{'roleKey': 1, 'status': 1}")
+/** Relationship between a database-owned Nexus role and a reusable permission. */
+@Document(collection = "nexus_role_permissions")
+@CompoundIndex(name = "ux_nexus_role_permission", def = "{'roleId': 1, 'permissionId': 1}", unique = true)
+@CompoundIndex(name = "ix_nexus_role_permissions_by_role", def = "{'roleId': 1, 'status': 1}")
 @CompoundIndex(name = "ix_role_permissions_by_permission", def = "{'permissionId': 1, 'status': 1}")
 public class RolePermission {
 
     @Id
     private String id;
-    private String roleKey;
+    private String roleId;
     private String permissionId;
     private RolePermissionStatus status;
     private Instant validFrom;
@@ -35,8 +35,8 @@ public class RolePermission {
     protected RolePermission() {
     }
 
-    public RolePermission(String roleKey, String permissionId, String actorSub) {
-        this.roleKey = roleKey;
+    public RolePermission(String roleId, String permissionId, String actorSub) {
+        this.roleId = roleId;
         this.permissionId = permissionId;
         this.status = RolePermissionStatus.ACTIVE;
         this.createdBy = actorSub;
@@ -44,7 +44,7 @@ public class RolePermission {
     }
 
     public String getId() { return id; }
-    public String getRoleKey() { return roleKey; }
+    public String getRoleId() { return roleId; }
     public String getPermissionId() { return permissionId; }
     public RolePermissionStatus getStatus() { return status; }
     public Instant getValidFrom() { return validFrom; }

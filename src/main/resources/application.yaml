@@ -15,17 +15,11 @@ server:
 # (env vars, ~/.aws/credentials, or an assumed IAM role / IRSA in EKS).
 # Never hard-code access keys here. The service principal needs the following
 # Cognito IAM actions on the target User Pool:
-#   cognito-idp:ListUsers, AdminGetUser, AdminListGroupsForUser,
-#   ListGroups, GetGroup, CreateGroup, UpdateGroup,
-#   AdminAddUserToGroup, AdminRemoveUserFromGroup, ListUsersInGroup
+#   cognito-idp:ListUsers, AdminGetUser
 cognito:
   region: ${COGNITO_REGION:us-east-1}
   user-pool-id: ${COGNITO_USER_POOL_ID:}
   app-client-id: ${COGNITO_APP_CLIENT_ID:}
-  # Azure-managed Cognito group that is the source of truth for the app's users.
-  # The /api/v1/users endpoint lists only the members of this group.
-  source-group: ${COGNITO_SOURCE_GROUP:}
-  admin-group: ${COGNITO_ADMIN_GROUP:rbac-admins}
   default-page-size: 25
 
 # A MongoDB transactional outbox is always written. When the SNS topic is

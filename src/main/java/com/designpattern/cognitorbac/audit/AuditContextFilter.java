@@ -29,7 +29,7 @@ public class AuditContextFilter extends OncePerRequestFilter {
     public static final String AUDIT_REASON_HEADER = "X-Audit-Reason";
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     private static final Set<String> AUDITED_API_PREFIXES = Set.of(
-            "/api/v1/groups",
+            "/api/v1/roles",
             "/api/v1/permissions",
             "/api/v1/policies",
             "/api/v1/users"

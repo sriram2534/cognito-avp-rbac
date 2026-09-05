@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Public representation of a Cognito user, enriched with group memberships.
+ * Public representation of a Cognito user, enriched with Nexus role memberships.
  */
 public record UserResponse(
         String username,
@@ -16,7 +16,7 @@ public record UserResponse(
         String familyName,
         boolean enabled,
         String status,
-        List<String> groups,
+        List<String> roles,
         Instant createdAt,
         Instant lastModifiedAt
 ) {

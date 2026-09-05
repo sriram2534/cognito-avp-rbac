@@ -35,23 +35,6 @@ public class CognitoProperties {
     private String appClientId;
 
     /**
-     * The Azure-managed Cognito group that is the source of truth for the
-     * application's user base. The {@code /api/v1/users} endpoint lists only the
-     * members of this group. Users are provisioned into it when they federate in
-     * through Azure AD (SAML/OIDC).
-     */
-    @NotBlank
-    private String sourceGroup;
-
-    /**
-     * The Cognito group that grants administrative privileges over the RBAC
-     * write operations (create/update group, add/remove users). Users must be a
-     * member of this group in Cognito to invoke protected write endpoints.
-     */
-    @NotBlank
-    private String adminGroup = "rbac-admins";
-
-    /**
      * Default page size used when the caller does not supply a limit.
      */
     private int defaultPageSize = 25;

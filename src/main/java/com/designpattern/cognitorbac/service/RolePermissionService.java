@@ -14,10 +14,12 @@ import com.designpattern.cognitorbac.outbox.AuthorizationOutboxService;
 import com.designpattern.cognitorbac.permission.Permission;
 import com.designpattern.cognitorbac.permission.PermissionRepository;
 import com.designpattern.cognitorbac.permission.PermissionStatus;
-import com.designpattern.cognitorbac.permission.RoleKey;
 import com.designpattern.cognitorbac.permission.RolePermission;
 import com.designpattern.cognitorbac.permission.RolePermissionRepository;
 import com.designpattern.cognitorbac.permission.RolePermissionStatus;
+import com.designpattern.cognitorbac.role.NexusRole;
+import com.designpattern.cognitorbac.role.NexusRoleRepository;
+import com.designpattern.cognitorbac.role.NexusRoleStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
@@ -28,15 +30,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Assigns reusable MongoDB permissions to Cognito groups. No role collection is
- * created: Cognito remains authoritative for role existence and membership.
+ * Assigns reusable MongoDB permissions to database-owned Nexus roles.
  */
 @Service
 public class RolePermissionService {
     private static final Logger log = LoggerFactory.getLogger(RolePermissionService.class);
     private final RolePermissionRepository relationships;
     private final PermissionRepository permissions;
-    private final GroupService groupService;
+    private final NexusRoleRepository roles;
     private final AuditService auditService;
     private final AuthorizationOutboxService outboxService;
     private final RolePermissionMapper rolePermissionMapper;
@@ -44,14 +45,14 @@ public class RolePermissionService {
     private final FieldChangeMapper fieldChangeMapper;
 
     public RolePermissionService(RolePermissionRepository relationships, PermissionRepository permissions,
-                                 GroupService groupService, AuditService auditService,
+                                 NexusRoleRepository roles, AuditService auditService,
                                  AuthorizationOutboxService outboxService,
                                  RolePermissionMapper rolePermissionMapper,
                                  PermissionMapper permissionMapper,
                                  FieldChangeMapper fieldChangeMapper) {
         this.relationships = relationships;
         this.permissions = permissions;
-        this.groupService = groupService;
+        this.roles = roles;
         this.auditService = auditService;
         this.outboxService = outboxService;
         this.rolePermissionMapper = rolePermissionMapper;
@@ -60,50 +61,49 @@ public class RolePermissionService {
     }
 
     @Transactional
-    public RolePermissionResponse grant(String roleKey, String permissionId) {
-        String canonicalRoleKey = RoleKey.requireCanonical(roleKey);
-        groupService.requireRole(canonicalRoleKey);
+    public RolePermissionResponse grant(String roleId, String permissionId) {
+        NexusRole role = requireActiveRole(roleId);
         Permission permission = permissions.findByPermissionId(permissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission not found: " + permissionId));
         if (permission.getStatus() != PermissionStatus.ACTIVE) {
             throw new ResourceConflictException("Cannot assign an inactive permission: " + permissionId);
         }
-        RolePermission relationship = relationships.findByRoleKeyAndPermissionId(canonicalRoleKey, permissionId)
-                .map(existing -> restore(existing, canonicalRoleKey))
-                .orElseGet(() -> create(canonicalRoleKey, permissionId));
+        RolePermission relationship = relationships.findByRoleIdAndPermissionId(role.getRoleId(), permissionId)
+                .map(existing -> restore(existing, role))
+                .orElseGet(() -> create(role, permissionId));
         return rolePermissionMapper.toResponse(relationship);
     }
 
     @Transactional
-    public void revoke(String roleKey, String permissionId) {
-        String canonicalRoleKey = RoleKey.requireCanonical(roleKey);
-        RolePermission relationship = relationships.findByRoleKeyAndPermissionId(canonicalRoleKey, permissionId)
+    public void revoke(String roleId, String permissionId) {
+        NexusRole role = requireRole(roleId);
+        RolePermission relationship = relationships.findByRoleIdAndPermissionId(role.getRoleId(), permissionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Role permission relationship not found for role " + canonicalRoleKey));
+                        "Role permission relationship not found for role " + roleId));
         if (relationship.getStatus() == RolePermissionStatus.REVOKED) {
-            log.info("Role permission revocation is idempotent [roleKey={}] [permissionId={}]",
-                    canonicalRoleKey, permissionId);
+            log.info("Role permission revocation is idempotent [roleId={}] [permissionId={}]",
+                    role.getRoleId(), permissionId);
             return;
         }
         relationship.revoke(PermissionService.actorSub());
         relationships.save(relationship);
         auditService.recordAuthorizationChange(AuditAction.ROLE_PERMISSION_REVOKED, "ROLE_PERMISSION",
-                relationship.getId(), canonicalRoleKey, permissionId,
+                relationship.getRoleId() + ":" + permissionId, role.getRoleKey(), permissionId,
                 List.of(fieldChangeMapper.toFieldChange("status", "ACTIVE", "REVOKED")));
         publishRolePermissionsChanged(relationship);
-        log.info("Role permission revoked [rolePermissionId={}] [roleKey={}] [permissionId={}]",
-                relationship.getId(), canonicalRoleKey, permissionId);
+        log.info("Role permission revoked [rolePermissionId={}] [roleId={}] [permissionId={}]",
+                relationship.getId(), role.getRoleId(), permissionId);
     }
 
-    public List<PermissionResponse> permissionsForRole(String roleKey) {
-        String canonicalRoleKey = RoleKey.requireCanonical(roleKey);
-        List<PermissionResponse> result = relationships.findByRoleKeyAndStatus(canonicalRoleKey, RolePermissionStatus.ACTIVE).stream()
+    public List<PermissionResponse> permissionsForRole(String roleId) {
+        NexusRole role = requireRole(roleId);
+        List<PermissionResponse> result = relationships.findByRoleIdAndStatus(role.getRoleId(), RolePermissionStatus.ACTIVE).stream()
                 .map(RolePermission::getPermissionId)
                 .map(permissions::findByPermissionId)
                 .flatMap(java.util.Optional::stream)
                 .map(permissionMapper::toResponse)
                 .toList();
-        log.debug("Role permissions listed [roleKey={}] [count={}]", canonicalRoleKey, result.size());
+        log.debug("Role permissions listed [roleId={}] [count={}]", roleId, result.size());
         return result;
     }
 
@@ -117,46 +117,61 @@ public class RolePermissionService {
         return result;
     }
 
-    public boolean hasActivePermissions(String roleKey) {
-        return relationships.countByRoleKeyAndStatus(roleKey, RolePermissionStatus.ACTIVE) > 0;
+    public boolean hasActivePermissions(String roleId) {
+        return relationships.countByRoleIdAndStatus(roleId, RolePermissionStatus.ACTIVE) > 0;
     }
 
-    private RolePermission create(String roleKey, String permissionId) {
+    private RolePermission create(NexusRole role, String permissionId) {
         RolePermission relationship = relationships.save(
-                rolePermissionMapper.toEntity(roleKey, permissionId, PermissionService.actorSub()));
+                rolePermissionMapper.toEntity(role.getRoleId(), permissionId, PermissionService.actorSub()));
         auditService.recordAuthorizationChange(AuditAction.ROLE_PERMISSION_GRANTED, "ROLE_PERMISSION",
-                relationship.getId(), roleKey, permissionId,
+                relationship.getRoleId() + ":" + permissionId, role.getRoleKey(), permissionId,
                 List.of(fieldChangeMapper.toFieldChange("status", null, "ACTIVE")));
         publishRolePermissionsChanged(relationship);
-        log.info("Role permission granted [rolePermissionId={}] [roleKey={}] [permissionId={}]",
-                relationship.getId(), roleKey, permissionId);
+        log.info("Role permission granted [rolePermissionId={}] [roleId={}] [permissionId={}]",
+                relationship.getId(), role.getRoleId(), permissionId);
         return relationship;
     }
 
-    private RolePermission restore(RolePermission relationship, String roleKey) {
+    private RolePermission restore(RolePermission relationship, NexusRole role) {
         if (relationship.getStatus() == RolePermissionStatus.ACTIVE) {
-            throw new ResourceConflictException("Permission is already assigned to role " + roleKey);
+            throw new ResourceConflictException("Permission is already assigned to role " + role.getRoleId());
         }
         relationship.restore(PermissionService.actorSub());
         relationships.save(relationship);
         auditService.recordAuthorizationChange(AuditAction.ROLE_PERMISSION_RESTORED, "ROLE_PERMISSION",
-                relationship.getId(), roleKey, relationship.getPermissionId(),
+                relationship.getRoleId() + ":" + relationship.getPermissionId(), role.getRoleKey(), relationship.getPermissionId(),
                 List.of(fieldChangeMapper.toFieldChange("status", "REVOKED", "ACTIVE")));
         publishRolePermissionsChanged(relationship);
-        log.info("Role permission restored [rolePermissionId={}] [roleKey={}] [permissionId={}]",
-                relationship.getId(), roleKey, relationship.getPermissionId());
+        log.info("Role permission restored [rolePermissionId={}] [roleId={}] [permissionId={}]",
+                relationship.getId(), role.getRoleId(), relationship.getPermissionId());
         return relationship;
     }
 
     private void publishRolePermissionsChanged(RolePermission relationship) {
-        outboxService.enqueue("ROLE_PERMISSIONS_CHANGED", relationship.getRoleKey(), Map.of(
+        NexusRole role = requireRole(relationship.getRoleId());
+        outboxService.enqueue("ROLE_PERMISSIONS_CHANGED", relationship.getRoleId(), Map.of(
                 "eventVersion", 1,
                 "eventType", "ROLE_PERMISSIONS_CHANGED",
-                "roleKey", relationship.getRoleKey(),
+                "roleId", relationship.getRoleId(),
+                "roleKey", role.getRoleKey(),
                 "rolePermissionVersion", relationship.getVersion() == null ? 0L : relationship.getVersion(),
                 "correlationId", PermissionService.correlationId(),
                 "occurredAt", Instant.now().toString()));
-        log.debug("Role permission invalidation prepared [roleKey={}] [rolePermissionId={}]",
-                relationship.getRoleKey(), relationship.getId());
+        log.debug("Role permission invalidation prepared [roleId={}] [rolePermissionId={}]",
+                relationship.getRoleId(), relationship.getId());
+    }
+
+    private NexusRole requireRole(String roleId) {
+        return roles.findByRoleId(roleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + roleId));
+    }
+
+    private NexusRole requireActiveRole(String roleId) {
+        NexusRole role = requireRole(roleId);
+        if (role.getStatus() != NexusRoleStatus.ACTIVE) {
+            throw new ResourceConflictException("Role is inactive: " + roleId);
+        }
+        return role;
     }
 }

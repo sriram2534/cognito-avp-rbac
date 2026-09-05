@@ -3,7 +3,7 @@ package com.designpattern.cognitorbac.permission;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/** Canonical Cognito group name used as the application's role key. */
+/** Canonical database-owned Nexus role key. */
 public final class RoleKey {
     private static final Pattern ROLE_KEY = Pattern.compile("^[a-z0-9][a-z0-9_-]{0,62}:[a-z0-9][a-z0-9_-]{0,62}$");
 

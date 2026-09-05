@@ -5,7 +5,7 @@ import com.designpattern.cognitorbac.permission.RolePermissionStatus;
 import java.time.Instant;
 
 public record RolePermissionResponse(
-        String roleKey,
+        String roleId,
         String permissionId,
         RolePermissionStatus status,
         Instant validFrom,

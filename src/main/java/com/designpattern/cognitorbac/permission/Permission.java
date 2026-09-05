@@ -13,14 +13,14 @@ import java.time.Instant;
 /**
  * Reusable, structured capability. Its coordinates are immutable after creation.
  */
-@Document(collection = "permissions")
+@Document(collection = "nexus_permissions")
 @CompoundIndex(name = "ux_permission_coordinates", def = "{'module': 1, 'resourceType': 1, 'access': 1}", unique = true)
 public class Permission {
 
     @Id
     private String id;
     /**
-     * Stable external identifier used by API clients and role_permissions.
+     * Stable external identifier used by API clients and nexus_role_permissions.
      * MongoDB _id remains an internal persistence identifier.
      */
     @Indexed(name = "ux_permission_id", unique = true, sparse = true)

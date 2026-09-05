@@ -20,7 +20,7 @@ import java.util.List;
 /** Administrative API for reusable permission source data. */
 @RestController
 @RequestMapping("/api/v1/permissions")
-@PreAuthorize("hasRole(@rbac.adminRole)")
+@PreAuthorize("isAuthenticated()")
 public class PermissionController {
     private final PermissionService permissionService;
     private final RolePermissionService rolePermissionService;
@@ -69,8 +69,8 @@ public class PermissionController {
         return permissionService.activate(permissionId);
     }
 
-    @GetMapping("/{permissionId}/groups")
-    public List<RolePermissionResponse> groupsUsingPermission(@PathVariable String permissionId) {
+    @GetMapping("/{permissionId}/roles")
+    public List<RolePermissionResponse> rolesUsingPermission(@PathVariable String permissionId) {
         return rolePermissionService.rolesForPermission(permissionId);
     }
 }

@@ -71,6 +71,7 @@ public class PermissionService {
                         fieldChangeMapper.toFieldChange("resourceType", null, permission.getResourceType()),
                         fieldChangeMapper.toFieldChange("access", null, permission.getAccess()),
                         fieldChangeMapper.toFieldChange("status", null, permission.getStatus().name())));
+        publishPermissionChanged(permission);
         log.info("Permission created [permissionId={}] [coordinates={}] [status={}]",
                 permission.getPermissionId(), coordinates.displayKey(), permission.getStatus());
         return permissionMapper.toResponse(permission);
@@ -142,18 +143,18 @@ public class PermissionService {
     }
 
     private void publishPermissionChanged(Permission permission) {
-        List<String> affectedRoleKeys = rolePermissions.findByPermissionIdAndStatus(
+        List<String> affectedRoleIds = rolePermissions.findByPermissionIdAndStatus(
                         permission.getPermissionId(), RolePermissionStatus.ACTIVE)
-                .stream().map(RolePermission::getRoleKey).distinct().sorted().toList();
+                .stream().map(RolePermission::getRoleId).distinct().sorted().toList();
         outboxService.enqueue("PERMISSION_CHANGED", permission.getPermissionId(), Map.of(
                 "eventVersion", 1,
                 "eventType", "PERMISSION_CHANGED",
                 "permissionId", permission.getPermissionId(),
-                "affectedRoleKeys", affectedRoleKeys,
+                "affectedRoleIds", affectedRoleIds,
                 "correlationId", correlationId(),
                 "occurredAt", Instant.now().toString()));
         log.debug("Permission invalidation prepared [permissionId={}] [affectedRoleCount={}]",
-                permission.getPermissionId(), affectedRoleKeys.size());
+                permission.getPermissionId(), affectedRoleIds.size());
     }
 
     private static String nullableTrim(String value) {

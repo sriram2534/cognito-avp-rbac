@@ -26,7 +26,7 @@ import java.util.List;
  *   <li>Stateless session management (no server-side sessions).</li>
  *   <li>Signature validation against the Cognito JWKS endpoint.</li>
  *   <li>Issuer, expiry, and (optional) audience validation.</li>
- *   <li>Cognito groups mapped to {@code ROLE_*} authorities for RBAC.</li>
+ *   <li>Authorization is enforced by the external authorization service or API gateway.</li>
  * </ul>
  */
 @Configuration
@@ -69,7 +69,7 @@ public class SecurityConfig {
 
     private JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(new CognitoGroupsAuthoritiesConverter());
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> List.of());
         converter.setPrincipalClaimName("username");
         return converter;
     }
