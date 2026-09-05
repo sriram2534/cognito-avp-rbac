@@ -39,7 +39,7 @@ public class AuditController {
      * <p>Examples:
      * <pre>
      *   GET /api/v1/audit/search?roleKey=ops:developer
-     *   GET /api/v1/audit/search?actorSub=uuid-123&actions=ROLE_CREATED,ROLE_UPDATED
+     *   GET /api/v1/audit/search?userSub=uuid-123&actions=ROLE_CREATED,ROLE_UPDATED
      *   GET /api/v1/audit/search?changedField=email&from=2026-08-01T00:00:00Z
      *   GET /api/v1/audit/search?actions=USER_DISABLED,USER_ENABLED&from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z
      * </pre>
@@ -47,8 +47,9 @@ public class AuditController {
      */
     @GetMapping("/search")
     public Page<AuditEntry> search(
-            @RequestParam(required = false) String actorSub,
-            @RequestParam(required = false) String actorEmail,
+            @RequestParam(required = false) String userSub,
+            @RequestParam(required = false) String userEmail,
+            @RequestParam(required = false) String roleName,
             @RequestParam(required = false) String roleKey,
             @RequestParam(required = false) String permissionId,
             @RequestParam(required = false) String aggregateType,
@@ -61,8 +62,9 @@ public class AuditController {
             @RequestParam(defaultValue = "20") int size) {
 
         AuditFilter filter = AuditFilter.builder()
-                .actorSub(actorSub)
-                .actorEmail(actorEmail)
+                .userSub(userSub)
+                .userEmail(userEmail)
+                .roleName(roleName)
                 .roleKey(roleKey)
                 .permissionId(permissionId)
                 .aggregateType(aggregateType)
@@ -107,14 +109,14 @@ public class AuditController {
     /**
      * Returns paginated audit history for a specific caller identified by their Cognito sub.
      */
-    @GetMapping("/actors/{actorSub}")
-    public Page<AuditEntry> byActor(
-            @PathVariable String actorSub,
+    @GetMapping("/users/{userSub}")
+    public Page<AuditEntry> byUser(
+            @PathVariable String userSub,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         PageRequest pageable = PageRequest.of(page, clamp(size), Sort.by(Sort.Direction.DESC, "occurred_at"));
-        return auditService.findByActor(actorSub, pageable);
+        return auditService.findByUser(userSub, pageable);
     }
 
     /**

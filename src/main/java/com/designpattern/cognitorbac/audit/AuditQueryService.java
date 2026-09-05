@@ -24,8 +24,8 @@ import java.util.List;
  *
  * <p>Indexed fields used by criteria:
  * <ul>
- *   <li>{@code group_name}  — equality</li>
- *   <li>{@code actor_sub}   — equality</li>
+     *   <li>{@code role_name}   — equality</li>
+     *   <li>{@code user_sub}    — equality</li>
  *   <li>{@code action}      — $in list</li>
  *   <li>{@code occurred_at} — range ($gte / $lte)</li>
  *   <li>{@code changes.field} — element match (array field, no separate index needed for MVP)</li>
@@ -77,17 +77,14 @@ public class AuditQueryService {
     private Query buildQuery(AuditFilter f) {
         List<Criteria> criteria = new ArrayList<>();
 
-        if (f.getGroupName() != null && !f.getGroupName().isBlank()) {
-            criteria.add(Criteria.where("group_name").is(f.getGroupName()));
+        if (f.getRoleName() != null && !f.getRoleName().isBlank()) {
+            criteria.add(Criteria.where("role_name").is(f.getRoleName()));
         }
-        if (f.getTargetUsername() != null && !f.getTargetUsername().isBlank()) {
-            criteria.add(Criteria.where("target_username").is(f.getTargetUsername()));
+        if (f.getUserSub() != null && !f.getUserSub().isBlank()) {
+            criteria.add(Criteria.where("user_sub").is(f.getUserSub()));
         }
-        if (f.getActorSub() != null && !f.getActorSub().isBlank()) {
-            criteria.add(Criteria.where("actor_sub").is(f.getActorSub()));
-        }
-        if (f.getActorEmail() != null && !f.getActorEmail().isBlank()) {
-            criteria.add(Criteria.where("actor_email").is(f.getActorEmail()));
+        if (f.getUserEmail() != null && !f.getUserEmail().isBlank()) {
+            criteria.add(Criteria.where("user_email").is(f.getUserEmail()));
         }
         if (f.getRoleKey() != null && !f.getRoleKey().isBlank()) {
             criteria.add(Criteria.where("role_key").is(f.getRoleKey()));

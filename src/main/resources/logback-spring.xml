@@ -23,7 +23,7 @@
 
         Each log line is a single-line JSON object. CloudWatch Logs Insights
         can query any field directly — e.g.:
-            fields @timestamp, level, message, requestId, actorSub, auditAction
+            fields @timestamp, level, message, requestId, userSub, userEmail, auditAction
             | filter level = "ERROR"
             | sort @timestamp desc
     -->

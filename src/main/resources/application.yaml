@@ -22,13 +22,6 @@ cognito:
   app-client-id: ${COGNITO_APP_CLIENT_ID:}
   default-page-size: 25
 
-# A MongoDB transactional outbox is always written. When the SNS topic is
-# configured, committed records are delivered asynchronously to the topic.
-authorization-events:
-  topic-arn: ${AUTHORIZATION_EVENTS_TOPIC_ARN:}
-  region: ${AUTHORIZATION_EVENTS_REGION:${COGNITO_REGION:us-east-1}}
-  publish-interval-ms: ${AUTHORIZATION_EVENTS_PUBLISH_INTERVAL_MS:1000}
-
 management:
   endpoints:
     web:

@@ -1,7 +1,7 @@
 package com.designpattern.cognitorbac.exception;
 
 /**
- * Thrown when a requested Cognito resource (user or group) does not exist.
+ * Thrown when a requested identity or authorization resource does not exist.
  */
 public class ResourceNotFoundException extends RuntimeException {
 
@@ -11,9 +11,5 @@ public class ResourceNotFoundException extends RuntimeException {
 
     public static ResourceNotFoundException user(String username) {
         return new ResourceNotFoundException("User not found: " + username);
-    }
-
-    public static ResourceNotFoundException group(String groupName) {
-        return new ResourceNotFoundException("Group not found: " + groupName);
     }
 }

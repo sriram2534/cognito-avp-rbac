@@ -17,8 +17,8 @@ import java.util.List;
  *
  * <p>Indexed fields:
  * <ul>
- *   <li>{@code actor_sub} — find all actions by a specific caller</li>
- *   <li>{@code group_name} — find all events for a specific group</li>
+ *   <li>{@code user_sub} — find all actions by a specific caller</li>
+ *   <li>{@code role_name} — find all events for a specific role</li>
  *   <li>{@code action} — filter by action type</li>
  *   <li>{@code occurred_at} — time-range queries, TTL if needed</li>
  * </ul>
@@ -34,11 +34,8 @@ public class AuditEntry {
     private AuditAction action;
 
     @Indexed
-    @Field("group_name")
-    private String groupName;
-
-    @Field("target_username")
-    private String targetUsername;
+    @Field("role_name")
+    private String roleName;
 
     @Indexed
     @Field("aggregate_type")
@@ -56,15 +53,13 @@ public class AuditEntry {
     @Field("permission_id")
     private String permissionId;
 
-    @Field("actor_sub")
+    @Field("user_sub")
     @Indexed
-    private String actorSub;
+    private String userSub;
 
-    @Field("actor_email")
-    private String actorEmail;
-
-    @Field("actor_groups")
-    private java.util.List<String> actorGroups;
+    @Field("user_email")
+    @Indexed
+    private String userEmail;
 
     @Field("reason")
     private String reason;
@@ -85,15 +80,13 @@ public class AuditEntry {
 
     private AuditEntry(Builder builder) {
         this.action = builder.action;
-        this.groupName = builder.groupName;
-        this.targetUsername = builder.targetUsername;
+        this.roleName = builder.roleName;
         this.aggregateType = builder.aggregateType;
         this.aggregateId = builder.aggregateId;
         this.roleKey = builder.roleKey;
         this.permissionId = builder.permissionId;
-        this.actorSub = builder.actorSub;
-        this.actorEmail = builder.actorEmail;
-        this.actorGroups = builder.actorGroups;
+        this.userSub = builder.userSub;
+        this.userEmail = builder.userEmail;
         this.reason = builder.reason;
         this.correlationId = builder.correlationId;
         this.occurredAt = Instant.now();
@@ -112,15 +105,13 @@ public class AuditEntry {
     @JsonIgnore
     public String getId() { return id; }
     public AuditAction getAction() { return action; }
-    public String getGroupName() { return groupName; }
-    public String getTargetUsername() { return targetUsername; }
+    public String getRoleName() { return roleName; }
     public String getAggregateType() { return aggregateType; }
     public String getAggregateId() { return aggregateId; }
     public String getRoleKey() { return roleKey; }
     public String getPermissionId() { return permissionId; }
-    public String getActorSub() { return actorSub; }
-    public String getActorEmail() { return actorEmail; }
-    public java.util.List<String> getActorGroups() { return actorGroups; }
+    public String getUserSub() { return userSub; }
+    public String getUserEmail() { return userEmail; }
     public String getReason() { return reason; }
     public String getCorrelationId() { return correlationId; }
     public Instant getOccurredAt() { return occurredAt; }
@@ -128,15 +119,13 @@ public class AuditEntry {
 
     public static final class Builder {
         private AuditAction action;
-        private String groupName;
-        private String targetUsername;
+        private String roleName;
         private String aggregateType;
         private String aggregateId;
         private String roleKey;
         private String permissionId;
-        private String actorSub;
-        private String actorEmail;
-        private java.util.List<String> actorGroups;
+        private String userSub;
+        private String userEmail;
         private String reason;
         private String correlationId;
         private List<FieldChange> changes;
@@ -149,13 +138,8 @@ public class AuditEntry {
             return this;
         }
 
-        public Builder groupName(String groupName) {
-            this.groupName = groupName;
-            return this;
-        }
-
-        public Builder targetUsername(String targetUsername) {
-            this.targetUsername = targetUsername;
+        public Builder roleName(String roleName) {
+            this.roleName = roleName;
             return this;
         }
 
@@ -179,18 +163,13 @@ public class AuditEntry {
             return this;
         }
 
-        public Builder actorSub(String actorSub) {
-            this.actorSub = actorSub;
+        public Builder userSub(String userSub) {
+            this.userSub = userSub;
             return this;
         }
 
-        public Builder actorEmail(String actorEmail) {
-            this.actorEmail = actorEmail;
-            return this;
-        }
-
-        public Builder actorGroups(java.util.List<String> actorGroups) {
-            this.actorGroups = actorGroups;
+        public Builder userEmail(String userEmail) {
+            this.userEmail = userEmail;
             return this;
         }
 

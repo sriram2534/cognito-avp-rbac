@@ -15,15 +15,15 @@ import java.util.List;
 @Repository
 public interface AuditEntryRepository extends MongoRepository<AuditEntry, String> {
 
-    Page<AuditEntry> findByGroupName(String groupName, Pageable pageable);
+    Page<AuditEntry> findByRoleName(String roleName, Pageable pageable);
 
-    Page<AuditEntry> findByActorSub(String actorSub, Pageable pageable);
+    Page<AuditEntry> findByUserSub(String userSub, Pageable pageable);
 
     Page<AuditEntry> findByAction(AuditAction action, Pageable pageable);
 
     Page<AuditEntry> findByOccurredAtBetween(Instant from, Instant to, Pageable pageable);
 
-    Page<AuditEntry> findByGroupNameAndAction(String groupName, AuditAction action, Pageable pageable);
+    Page<AuditEntry> findByRoleNameAndAction(String roleName, AuditAction action, Pageable pageable);
 
-    List<AuditEntry> findTop50ByGroupNameOrderByOccurredAtDesc(String groupName);
+    List<AuditEntry> findTop50ByRoleNameOrderByOccurredAtDesc(String roleName);
 }

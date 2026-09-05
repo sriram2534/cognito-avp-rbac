@@ -30,8 +30,9 @@ public class CognitoProperties {
 
     /**
      * The Cognito App Client ID used as the expected JWT audience.
-     * Optional: when blank, audience validation is skipped.
+     * Required so tokens issued for another application client are rejected.
      */
+    @NotBlank
     private String appClientId;
 
     /**

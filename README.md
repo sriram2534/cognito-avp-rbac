@@ -13,18 +13,18 @@ Cognito user (`sub`)
 ```
 
 The service does not make application authorization decisions. The external
-authorization service consumes its data-change events and enforces access at the
-API gateway or service boundary.
+authorization service enforces access at the API gateway or service boundary.
 
 ## Documentation
 
 - [Nexus role model](docs/nexus-role-model.md) — collections, indexes, API,
-  events, aggregation design, audit, and migration guidance.
+  aggregation design, declarative audit, and migration guidance.
 - [AI agent guide](docs/ai-agent-guide.md) — invariants and safe change rules.
 
 ## Run locally
 
-Prerequisites: Java 21, MongoDB replica set, AWS credentials, Cognito user pool.
+Prerequisites: Java 21, MongoDB replica set, AWS credentials, and a Cognito user
+pool whose access tokens include the `email` claim.
 
 ```bash
 export COGNITO_REGION=us-east-1
@@ -40,6 +40,7 @@ Run verification:
 ./mvnw test
 ```
 
-`GET /actuator/health` is public. The other routes require a valid Cognito JWT;
-the external authorization service must protect administrative access before
-traffic reaches this application.
+`GET /actuator/health` is public. Other routes require a Cognito access token
+with `sub`, `email`, and the configured client ID. The external authorization
+service must protect administrative access before traffic reaches this
+application.

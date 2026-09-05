@@ -12,10 +12,9 @@ import java.util.List;
  */
 public class AuditFilter {
 
-    private final String groupName;
-    private final String targetUsername;
-    private final String actorSub;
-    private final String actorEmail;
+    private final String roleName;
+    private final String userSub;
+    private final String userEmail;
     private final String roleKey;
     private final String permissionId;
     private final String aggregateType;
@@ -26,10 +25,9 @@ public class AuditFilter {
     private final Instant to;
 
     private AuditFilter(Builder b) {
-        this.groupName      = b.groupName;
-        this.targetUsername = b.targetUsername;
-        this.actorSub       = b.actorSub;
-        this.actorEmail     = b.actorEmail;
+        this.roleName       = b.roleName;
+        this.userSub        = b.userSub;
+        this.userEmail      = b.userEmail;
         this.roleKey        = b.roleKey;
         this.permissionId   = b.permissionId;
         this.aggregateType  = b.aggregateType;
@@ -42,10 +40,9 @@ public class AuditFilter {
 
     public static Builder builder() { return new Builder(); }
 
-    public String getGroupName()      { return groupName; }
-    public String getTargetUsername() { return targetUsername; }
-    public String getActorSub()       { return actorSub; }
-    public String getActorEmail()     { return actorEmail; }
+    public String getRoleName()       { return roleName; }
+    public String getUserSub()        { return userSub; }
+    public String getUserEmail()      { return userEmail; }
     public String getRoleKey()        { return roleKey; }
     public String getPermissionId()   { return permissionId; }
     public String getAggregateType()  { return aggregateType; }
@@ -56,10 +53,9 @@ public class AuditFilter {
     public Instant getTo()            { return to; }
 
     public static final class Builder {
-        private String groupName;
-        private String targetUsername;
-        private String actorSub;
-        private String actorEmail;
+        private String roleName;
+        private String userSub;
+        private String userEmail;
         private String roleKey;
         private String permissionId;
         private String aggregateType;
@@ -69,10 +65,9 @@ public class AuditFilter {
         private Instant from;
         private Instant to;
 
-        public Builder groupName(String v)      { this.groupName = v; return this; }
-        public Builder targetUsername(String v) { this.targetUsername = v; return this; }
-        public Builder actorSub(String v)       { this.actorSub = v; return this; }
-        public Builder actorEmail(String v)     { this.actorEmail = v; return this; }
+        public Builder roleName(String v)       { this.roleName = v; return this; }
+        public Builder userSub(String v)        { this.userSub = v; return this; }
+        public Builder userEmail(String v)      { this.userEmail = v; return this; }
         public Builder roleKey(String v)        { this.roleKey = v; return this; }
         public Builder permissionId(String v)   { this.permissionId = v; return this; }
         public Builder aggregateType(String v)  { this.aggregateType = v; return this; }

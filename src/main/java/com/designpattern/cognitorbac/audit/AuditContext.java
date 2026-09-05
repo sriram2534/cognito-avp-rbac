@@ -1,7 +1,5 @@
 package com.designpattern.cognitorbac.audit;
 
-import java.util.List;
-
 /**
  * Per-request audit context stored in a ThreadLocal.
  * Populated by {@link AuditContextFilter} at the start of every request
@@ -15,24 +13,21 @@ public final class AuditContext {
 
     private static final ThreadLocal<AuditContext> HOLDER = new ThreadLocal<>();
 
-    private final String actorSub;
-    private final String actorEmail;
-    private final List<String> actorGroups;
+    private final String userSub;
+    private final String userEmail;
     private final String reason;
     private final String correlationId;
 
-    private AuditContext(String actorSub, String actorEmail, List<String> actorGroups, String reason,
+    private AuditContext(String userSub, String userEmail, String reason,
                          String correlationId) {
-        this.actorSub = actorSub;
-        this.actorEmail = actorEmail;
-        this.actorGroups = actorGroups;
+        this.userSub = userSub;
+        this.userEmail = userEmail;
         this.reason = reason;
         this.correlationId = correlationId;
     }
 
-    public static void set(String actorSub, String actorEmail, List<String> actorGroups, String reason,
-                           String correlationId) {
-        HOLDER.set(new AuditContext(actorSub, actorEmail, actorGroups, reason, correlationId));
+    public static void set(String userSub, String userEmail, String reason, String correlationId) {
+        HOLDER.set(new AuditContext(userSub, userEmail, reason, correlationId));
     }
 
     public static AuditContext current() {
@@ -43,9 +38,8 @@ public final class AuditContext {
         HOLDER.remove();
     }
 
-    public String getActorSub() { return actorSub; }
-    public String getActorEmail() { return actorEmail; }
-    public List<String> getActorGroups() { return actorGroups; }
+    public String getUserSub() { return userSub; }
+    public String getUserEmail() { return userEmail; }
     public String getReason() { return reason; }
     public String getCorrelationId() { return correlationId; }
 }

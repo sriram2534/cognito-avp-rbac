@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -63,29 +62,28 @@ public class AuditContextFilter extends OncePerRequestFilter {
         String requestId = correlationId(request);
         try {
             String reason     = request.getHeader(AUDIT_REASON_HEADER);
-            String actorSub   = callerContext.getCallerSub();
-            String actorEmail = resolveEmail();
-            List<String> actorGroups = callerContext.getCallerGroups();
+            String userSub = callerContext.getUserSub();
+            String userEmail = callerContext.getUserEmail();
 
             MDC.put("requestId", requestId);
             MDC.put("correlationId", requestId);
-            MDC.put("actorSub",   actorSub   != null ? actorSub   : "anonymous");
-            MDC.put("actorEmail", actorEmail != null ? actorEmail : "unknown");
+            MDC.put("userSub", userSub != null ? userSub : "anonymous");
+            MDC.put("userEmail", userEmail != null ? userEmail : "unknown");
             MDC.put("httpMethod", request.getMethod());
             MDC.put("httpPath",   request.getRequestURI());
 
             response.setHeader("X-Request-Id", requestId);
 
             // The request ID is the correlation ID for this service. It is also
-            // returned to callers, so audit/outbox records can be correlated.
-            AuditContext.set(actorSub, actorEmail, actorGroups, reason, requestId);
+            // returned to callers, so audit records can be correlated.
+            AuditContext.set(userSub, userEmail, reason, requestId);
             filterChain.doFilter(request, response);
         } finally {
             AuditContext.clear();
             MDC.remove("requestId");
             MDC.remove("correlationId");
-            MDC.remove("actorSub");
-            MDC.remove("actorEmail");
+            MDC.remove("userSub");
+            MDC.remove("userEmail");
             MDC.remove("httpMethod");
             MDC.remove("httpPath");
         }
@@ -99,16 +97,4 @@ public class AuditContextFilter extends OncePerRequestFilter {
         return UUID.randomUUID().toString();
     }
 
-    private String resolveEmail() {
-        try {
-            org.springframework.security.core.Authentication auth =
-                    org.springframework.security.core.context.SecurityContextHolder
-                            .getContext().getAuthentication();
-            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
-                return jwt.getClaimAsString("email");
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
 }

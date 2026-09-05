@@ -10,7 +10,7 @@
 | User-to-role membership | MongoDB `nexus_user_roles` |
 | Permissions | MongoDB `nexus_permissions` |
 | Role-to-permission assignment | MongoDB `nexus_role_permissions` |
-| Audit and event delivery | MongoDB `audit_entries`, `authorization_outbox` |
+| Audit history | MongoDB `audit_entries` |
 | Runtime allow/deny decision | External authorization service |
 
 This service never creates, reads, or mutates Cognito groups. It lists and
@@ -124,10 +124,11 @@ that is a derived optimization rather than source data.
 
 ## HTTP API
 
-All API routes require a valid Cognito JWT. External authorization must grant
-or deny administrative access before requests reach this service. Every write
-requires `X-Audit-Reason`; `X-Correlation-Id` is optional and is returned as
-`X-Request-Id`.
+All API routes require a Cognito access token containing `token_use=access`,
+`sub`, `email`, and the configured application-client audience/client ID.
+External authorization must grant or deny administrative access before requests
+reach this service. Every write requires a nonblank `X-Audit-Reason`;
+`X-Correlation-Id` is optional and is returned as `X-Request-Id`.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -174,24 +175,34 @@ POST /api/v1/roles/{roleId}/users
 }
 ```
 
-## Audit and outbox events
+## Audit capture
 
-All role, user-role, permission, and role-permission source changes persist
-their source document, audit record, and outbox record in one MongoDB
-transaction. MongoDB must run as a replica set or sharded cluster. Reads are
-not audited.
+Mutating service methods declare their audit intent with `@AuthorizationAudit`.
+`AuthorizationAuditAspect` opens the outer MongoDB transaction, snapshots the
+required before-state, executes the mutation, and persists the audit document.
+The mutation and audit document commit together. An audit failure rolls the
+mutation back, while idempotent requests do not create audit records. Reads are
+not audited, and the project contains no queue, SNS, or outbox implementation.
 
-| Event | Trigger | Consumer action |
-|---|---|---|
-| `ROLE_CHANGED` | Role create/update/status | Invalidate role metadata. |
-| `USER_ROLE_MEMBERSHIP_CHANGED` | User assigned, restored, or removed | Invalidate the affected user’s role/effective-permission cache. |
-| `ROLE_PERMISSIONS_CHANGED` | Permission grant/revoke/restore | Invalidate role permission cache. |
-| `PERMISSION_CHANGED` | Permission description/status | Invalidate the permission and affected roles. |
-| `AUDIT_RECORDED` | Role and user-role mutation | Send durable audit activity to audit consumers. |
+Every new audit document contains the authenticated caller's mandatory
+`userSub` and `userEmail`. Role-related events contain both `roleName` (for
+example, `developer`) and immutable `roleKey` (for example,
+`deliveryops:developer`). For user-role changes, `changes.targetUserSub`
+identifies the affected user separately from the caller.
 
-Every event contains `eventVersion`, `eventType`, `correlationId`, and
-`occurredAt`. SNS publishing is asynchronous and at-least-once; consumers must
-de-duplicate messages by `eventId`.
+The audit filter captures only:
+
+- role created, activated, and deactivated;
+- user assigned, removed, or restored in a role;
+- permission created, activated, and deactivated; and
+- role-permission granted, revoked, or restored.
+
+Role metadata changes and permission-description changes are intentionally not
+captured by this filter.
+
+Existing audit documents using `group_name`, `actor_sub`, or `actor_email`
+require the one-time migration described in
+[audit-schema-migration.md](audit-schema-migration.md).
 
 ## Migration
 

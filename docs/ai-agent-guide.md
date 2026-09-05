@@ -16,13 +16,14 @@ owns runtime allow/deny decisions.
    `nexus_permissions`, and `nexus_role_permissions`.
 5. Preserve unique indexes on `(userSub, roleId)` and `(roleId, permissionId)`.
    Remove relationships through status changes, not hard deletion.
-6. Keep role, membership, permission, and role-permission changes
-   transactional with audit and outbox writes.
+6. Put `@AuthorizationAudit` on every captured mutation. The aspect derives
+   field deltas and skips idempotent calls within the same Mongo transaction as
+   the business mutation; services must not call `AuditService` directly.
 7. Audit writes only. Never audit `GET` requests.
+   Every audit record must contain authenticated `userSub` and `userEmail`.
 8. Use MapStruct mappers in services rather than manually constructing entities
    or response DTOs.
-9. Emit versioned outbox events. Consumers handle at-least-once delivery and
-   deduplicate with `eventId`.
+9. Do not add event propagation unless it is explicitly requested.
 10. Do not implement authorization decisions in this service. The gateway or
     external authorization service must protect management endpoints.
 
@@ -32,11 +33,10 @@ For a new mutable authorization-source feature:
 
 1. Update the document, repository index, DTO, and MapStruct mapper.
 2. Add precise validation and idempotent status semantics.
-3. Update the service transaction to persist field-level audit history and an
-   invalidation event.
-4. Keep event contracts backward compatible; add an `eventVersion` for changes.
-5. Update [nexus-role-model.md](nexus-role-model.md).
-6. Run:
+3. Choose an `AuthorizationAuditOperation` and annotate the public mutation
+   when its resulting action is included by `AuditActionFilter`.
+4. Update [nexus-role-model.md](nexus-role-model.md).
+5. Run:
 
 ```bash
 ./mvnw test
@@ -51,6 +51,5 @@ git diff --check
 | Permissions and assignments | `permission/` |
 | Role and membership workflow | `service/RoleService.java` |
 | Role-permission workflow | `service/RolePermissionService.java` |
-| Audit | `audit/` |
-| SNS transactional outbox | `outbox/` |
+| Declarative audit | `audit/AuthorizationAudit.java`, `audit/AuthorizationAuditAspect.java` |
 | API | `controller/RoleController.java`, `controller/PermissionController.java` |

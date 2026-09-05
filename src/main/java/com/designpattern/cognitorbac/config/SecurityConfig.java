@@ -1,5 +1,6 @@
 package com.designpattern.cognitorbac.config;
 
+import com.designpattern.cognitorbac.security.CognitoAccessTokenValidator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -25,7 +26,7 @@ import java.util.List;
  * <ul>
  *   <li>Stateless session management (no server-side sessions).</li>
  *   <li>Signature validation against the Cognito JWKS endpoint.</li>
- *   <li>Issuer, expiry, and (optional) audience validation.</li>
+ *   <li>Issuer, expiry, audience, access-token, and audit-identity validation.</li>
  *   <li>Authorization is enforced by the external authorization service or API gateway.</li>
  * </ul>
  */
@@ -34,9 +35,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final CognitoProperties properties;
+    private final CognitoAccessTokenValidator accessTokenValidator;
 
-    public SecurityConfig(CognitoProperties properties) {
+    public SecurityConfig(CognitoProperties properties, CognitoAccessTokenValidator accessTokenValidator) {
         this.properties = properties;
+        this.accessTokenValidator = accessTokenValidator;
     }
 
     @Bean
@@ -60,9 +63,8 @@ public class SecurityConfig {
 
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(JwtValidators.createDefaultWithIssuer(properties.resolveIssuerUri()));
-        if (properties.getAppClientId() != null && !properties.getAppClientId().isBlank()) {
-            validators.add(audienceValidator(properties.getAppClientId()));
-        }
+        validators.add(audienceValidator(properties.getAppClientId()));
+        validators.add(accessTokenValidator);
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
     }
@@ -95,4 +97,5 @@ public class SecurityConfig {
                             null));
         };
     }
+
 }

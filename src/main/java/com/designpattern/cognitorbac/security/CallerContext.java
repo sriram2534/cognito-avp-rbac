@@ -5,29 +5,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
-import java.util.Collection;
-import java.util.List;
-
 /** Extracts authenticated caller details needed by audit and management flows. */
 @Component
 public class CallerContext {
 
-    private static final String GROUPS_CLAIM = "cognito:groups";
-
-    public List<String> getCallerGroups() {
+    public String getUserEmail() {
         Jwt jwt = getJwt();
-        if (jwt == null) {
-            return List.of();
-        }
-
-        Object claim = jwt.getClaim(GROUPS_CLAIM);
-        if (claim instanceof Collection<?> collection) {
-            return collection.stream().map(String::valueOf).toList();
-        }
-        return List.of();
+        return jwt != null ? jwt.getClaimAsString("email") : null;
     }
 
-    public String getCallerSub() {
+    public String getUserSub() {
         Jwt jwt = getJwt();
         return jwt != null ? jwt.getSubject() : null;
     }
