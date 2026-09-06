@@ -12,4 +12,8 @@ public class ResourceNotFoundException extends RuntimeException {
     public static ResourceNotFoundException user(String username) {
         return new ResourceNotFoundException("User not found: " + username);
     }
+
+    public static ResourceNotFoundException userSub(String userSub) {
+        return new ResourceNotFoundException("Cognito user not found for sub: " + userSub);
+    }
 }

@@ -2,7 +2,6 @@ package com.designpattern.cognitorbac.permission;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 

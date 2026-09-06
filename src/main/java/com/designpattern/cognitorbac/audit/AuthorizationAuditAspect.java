@@ -122,9 +122,10 @@ public class AuthorizationAuditAspect {
         NexusRole role = roles.findByRoleId(roleId).orElse(null);
         Map<String, NexusUserRoleStatus> statuses = new HashMap<>();
         if (role != null) {
-            userSubs.stream().filter(value -> value != null && !value.isBlank()).map(String::trim).distinct()
-                    .forEach(userSub -> userRoles.findByUserSubAndRoleId(userSub, role.getRoleId())
-                            .ifPresent(relationship -> statuses.put(userSub, relationship.getStatus())));
+            List<String> normalizedUserSubs = userSubs.stream().filter(value -> value != null && !value.isBlank())
+                    .map(String::trim).distinct().toList();
+            userRoles.findByRoleIdAndUserSubIn(role.getRoleId(), normalizedUserSubs)
+                    .forEach(relationship -> statuses.put(relationship.getUserSub(), relationship.getStatus()));
         }
         return new AuditSnapshot(role == null ? null : role.getName(), role == null ? null : role.getRoleKey(),
                 roleId, null, null, null, null, null, null, statuses);

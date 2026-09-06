@@ -23,8 +23,9 @@ authorization service enforces access at the API gateway or service boundary.
 
 ## Run locally
 
-Prerequisites: Java 21, MongoDB replica set, AWS credentials, and a Cognito user
-pool whose access tokens include the `email` claim.
+Prerequisites: Java 21, MongoDB replica set, AWS credentials with
+`cognito-idp:ListUsers` and `cognito-idp:AdminGetUser`, and a Cognito user pool
+whose access tokens include the `email` claim.
 
 ```bash
 export COGNITO_REGION=us-east-1
@@ -44,3 +45,9 @@ Run verification:
 with `sub`, `email`, and the configured client ID. The external authorization
 service must protect administrative access before traffic reaches this
 application.
+
+User-role assignment accepts at most 50 canonical Cognito `sub` UUIDs. Each
+distinct subject is resolved by exact `sub` search and confirmed through
+`AdminGetUser` before the MongoDB mutation/audit transaction begins; an unknown
+subject returns `404`, malformed input returns `400`, and an unavailable or
+inconsistent Cognito dependency returns `502`.

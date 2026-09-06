@@ -21,7 +21,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /** Owns database-backed Nexus roles and user-to-role memberships. */
 @Service
@@ -89,9 +97,31 @@ public class RoleService {
 
     @Transactional
     @AuthorizationAudit(operation = AuthorizationAuditOperation.USER_ROLE_ASSOCIATED)
+    @ValidateCognitoUserSubs(argumentIndex = 1)
     public List<UserRoleResponse> assignUsers(String roleId, List<String> userSubs) {
         NexusRole role = requireActiveRole(roleId);
-        return userSubs.stream().distinct().map(userSub -> assignUser(role, requireUserSub(userSub))).toList();
+        List<String> normalizedUserSubs = userSubs.stream().map(RoleService::requireUserSub).distinct().toList();
+        Map<String, NexusUserRole> existingByUserSub = userRoles
+                .findByRoleIdAndUserSubIn(role.getRoleId(), normalizedUserSubs).stream()
+                .collect(Collectors.toMap(NexusUserRole::getUserSub, Function.identity()));
+        List<NexusUserRole> changed = new java.util.ArrayList<>();
+        List<NexusUserRole> result = normalizedUserSubs.stream().map(userSub -> {
+            NexusUserRole relationship = existingByUserSub.get(userSub);
+            if (relationship == null) {
+                relationship = roleMapper.toUserRoleEntity(userSub, role.getRoleId(), PermissionService.actorSub());
+                changed.add(relationship);
+            } else if (relationship.getStatus() == NexusUserRoleStatus.REMOVED) {
+                relationship.restore(PermissionService.actorSub());
+                changed.add(relationship);
+            }
+            return relationship;
+        }).toList();
+        if (!changed.isEmpty()) {
+            userRoles.saveAll(changed);
+        }
+        log.info("Nexus role memberships processed [roleId={}] [requested={}] [changed={}]",
+                role.getRoleId(), normalizedUserSubs.size(), changed.size());
+        return result.stream().map(roleMapper::toUserRoleResponse).toList();
     }
 
     @Transactional
@@ -114,14 +144,35 @@ public class RoleService {
     }
 
     public List<String> roleKeysForUser(String userSub) {
-        return userRoles.findByUserSubAndStatus(userSub, NexusUserRoleStatus.ACTIVE).stream()
-                .map(NexusUserRole::getRoleId)
-                .map(roles::findByRoleId)
-                .flatMap(java.util.Optional::stream)
+        String normalizedUserSub = requireUserSub(userSub);
+        return roleKeysForUsers(List.of(normalizedUserSub)).getOrDefault(normalizedUserSub, List.of());
+    }
+
+    /** Resolves one Cognito page of users with two MongoDB queries, independent of page size. */
+    public Map<String, List<String>> roleKeysForUsers(Collection<String> userSubs) {
+        List<String> normalizedUserSubs = userSubs.stream().filter(java.util.Objects::nonNull)
+                .map(String::trim).filter(value -> !value.isEmpty()).distinct().toList();
+        if (normalizedUserSubs.isEmpty()) {
+            return Map.of();
+        }
+        List<NexusUserRole> memberships = userRoles.findByUserSubInAndStatus(
+                normalizedUserSubs, NexusUserRoleStatus.ACTIVE);
+        LinkedHashSet<String> roleIds = memberships.stream().map(NexusUserRole::getRoleId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, String> activeRoleKeys = roleIds.isEmpty() ? Map.of() : roles.findByRoleIdIn(roleIds).stream()
                 .filter(role -> role.getStatus() == NexusRoleStatus.ACTIVE)
-                .map(NexusRole::getRoleKey)
-                .sorted()
-                .toList();
+                .collect(Collectors.toMap(NexusRole::getRoleId, NexusRole::getRoleKey));
+        Map<String, Set<String>> keysByUser = new LinkedHashMap<>();
+        normalizedUserSubs.forEach(userSub -> keysByUser.put(userSub, new TreeSet<>()));
+        memberships.forEach(membership -> {
+            String roleKey = activeRoleKeys.get(membership.getRoleId());
+            if (roleKey != null) {
+                keysByUser.get(membership.getUserSub()).add(roleKey);
+            }
+        });
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        keysByUser.forEach((userSub, roleKeys) -> result.put(userSub, List.copyOf(roleKeys)));
+        return java.util.Collections.unmodifiableMap(result);
     }
 
     public NexusRole requireRole(String roleId) {
@@ -135,27 +186,6 @@ public class RoleService {
             throw new ResourceConflictException("Role is inactive: " + roleId);
         }
         return role;
-    }
-
-    private UserRoleResponse assignUser(NexusRole role, String userSub) {
-        NexusUserRole relationship = userRoles.findByUserSubAndRoleId(userSub, role.getRoleId())
-                .map(existing -> restore(existing, role))
-                .orElseGet(() -> create(userSub, role));
-        return roleMapper.toUserRoleResponse(relationship);
-    }
-
-    private NexusUserRole create(String userSub, NexusRole role) {
-        NexusUserRole relationship = userRoles.save(roleMapper.toUserRoleEntity(userSub, role.getRoleId(), PermissionService.actorSub()));
-        return relationship;
-    }
-
-    private NexusUserRole restore(NexusUserRole relationship, NexusRole role) {
-        if (relationship.getStatus() == NexusUserRoleStatus.ACTIVE) {
-            return relationship;
-        }
-        relationship.restore(PermissionService.actorSub());
-        userRoles.save(relationship);
-        return relationship;
     }
 
     private RoleResponse changeStatus(String roleId, NexusRoleStatus desired) {

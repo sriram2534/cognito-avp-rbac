@@ -82,6 +82,8 @@ deactivated; its coordinates cannot change.
   "roleId": "3a7c4f8e-f2a3-4cc7-8d83-9c5d28e56024",
   "permissionId": "b9c211aa-5271-4a97-8ea8-4679cc4783dd",
   "status": "ACTIVE",
+  "validFrom": "2026-09-04T00:00:00Z",
+  "validUntil": null,
   "version": 0
 }
 ```
@@ -91,6 +93,8 @@ deactivated; its coordinates cannot change.
 - `(permissionId, status, roleId)` identifies roles affected by a permission
   change.
 - Revocation retains history as `REVOKED`; a later grant restores it.
+- `validFrom` records the current grant/restore time. Revocation sets
+  `validUntil`; restoring starts a new validity window and clears `validUntil`.
 - An inactive role or permission cannot receive a new assignment.
 
 ## Fast authorization aggregation
@@ -121,6 +125,12 @@ nexus_user_roles (userSub, ACTIVE)
 The compound indexes above support each join direction. A high-QPS
 authorization service may also cache `userSub -> effective permission set`, but
 that is a derived optimization rather than source data.
+
+Administration reads avoid per-document lookups. A Cognito user page resolves
+all memberships with one `userSub in (...)` query and all referenced roles with
+one `roleId in (...)` query. Listing a role's permissions similarly loads its
+relationships once and its permission documents with one `permissionId in
+(...)` query.
 
 ## HTTP API
 
@@ -175,6 +185,17 @@ POST /api/v1/roles/{roleId}/users
 }
 ```
 
+The request accepts 1–50 subjects. Subjects must be canonical UUIDs. Before any
+database mutation, the service resolves each distinct subject with an exact
+Cognito `ListUsers` filter, then confirms the returned username with
+`AdminGetUser`. Validation intentionally runs outside the audited MongoDB
+transaction so AWS calls cannot hold database transaction resources. The
+request is all-or-nothing: if any subject is malformed, unknown, inconsistent,
+or cannot be verified because Cognito is unavailable, no membership or audit
+record is written. `ListUsers` is eventually consistent, so a user created
+immediately before assignment can briefly receive `404`; clients may retry that
+case after a short delay.
+
 ## Audit capture
 
 Mutating service methods declare their audit intent with `@AuthorizationAudit`.
@@ -183,6 +204,9 @@ required before-state, executes the mutation, and persists the audit document.
 The mutation and audit document commit together. An audit failure rolls the
 mutation back, while idempotent requests do not create audit records. Reads are
 not audited, and the project contains no queue, SNS, or outbox implementation.
+Bulk user assignment snapshots existing relationships with one set-based query,
+then writes new/restored relationships in a batch before their audit records are
+committed.
 
 Every new audit document contains the authenticated caller's mandatory
 `userSub` and `userEmail`. Role-related events contain both `roleName` (for

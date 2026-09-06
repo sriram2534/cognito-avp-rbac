@@ -16,8 +16,11 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.CognitoIden
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /** Cognito identity reads. Nexus role membership is read from MongoDB. */
 @Service
@@ -42,9 +45,14 @@ public class UserService {
                     .limit(resolveLimit(limit));
             if (nextToken != null && !nextToken.isBlank()) builder.paginationToken(nextToken);
             ListUsersResponse response = cognito.listUsers(builder.build());
-            List<UserResponse> users = response.users().stream()
-                    .map(user -> mapper.toUserResponse(user, includeRoles
-                            ? roleService.roleKeysForUser(mapper.subOf(user)) : List.of()))
+            List<UserType> identities = response.users();
+            Map<String, List<String>> roleKeysByUser = includeRoles
+                    ? roleService.roleKeysForUsers(identities.stream().map(mapper::subOf)
+                            .filter(Objects::nonNull).toList())
+                    : Map.of();
+            List<UserResponse> users = identities.stream()
+                    .map(user -> mapper.toUserResponse(user,
+                            roleKeysByUser.getOrDefault(mapper.subOf(user), List.of())))
                     .toList();
             return PagedResponse.of(users, response.paginationToken());
         } catch (CognitoIdentityProviderException ex) {

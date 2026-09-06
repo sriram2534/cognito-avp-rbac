@@ -51,7 +51,7 @@
 
                 <!-- Stack traces as a JSON array, not a multi-line string -->
                 <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
-                    <maxDepthPerCause>20</maxDepthPerCause>
+                    <maxDepthPerThrowable>20</maxDepthPerThrowable>
                     <shortenedClassNameLength>40</shortenedClassNameLength>
                     <rootCauseFirst>true</rootCauseFirst>
                 </throwableConverter>

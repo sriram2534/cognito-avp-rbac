@@ -39,6 +39,8 @@ public class RolePermission {
         this.roleId = roleId;
         this.permissionId = permissionId;
         this.status = RolePermissionStatus.ACTIVE;
+        this.validFrom = Instant.now();
+        this.validUntil = null;
         this.createdBy = actorSub;
         this.updatedBy = actorSub;
     }
@@ -57,11 +59,14 @@ public class RolePermission {
 
     public void restore(String actorSub) {
         this.status = RolePermissionStatus.ACTIVE;
+        this.validFrom = Instant.now();
+        this.validUntil = null;
         this.updatedBy = actorSub;
     }
 
     public void revoke(String actorSub) {
         this.status = RolePermissionStatus.REVOKED;
+        this.validUntil = Instant.now();
         this.updatedBy = actorSub;
     }
 }

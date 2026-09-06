@@ -23,6 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Assigns reusable MongoDB permissions to database-owned Nexus roles.
@@ -82,10 +85,16 @@ public class RolePermissionService {
 
     public List<PermissionResponse> permissionsForRole(String roleId) {
         NexusRole role = requireRole(roleId);
-        List<PermissionResponse> result = relationships.findByRoleIdAndStatus(role.getRoleId(), RolePermissionStatus.ACTIVE).stream()
+        List<RolePermission> activeRelationships = relationships.findByRoleIdAndStatus(
+                role.getRoleId(), RolePermissionStatus.ACTIVE);
+        Map<String, Permission> permissionById = activeRelationships.isEmpty() ? Map.of()
+                : permissions.findByPermissionIdIn(activeRelationships.stream()
+                                .map(RolePermission::getPermissionId).distinct().toList()).stream()
+                        .collect(Collectors.toMap(Permission::getPermissionId, Function.identity()));
+        List<PermissionResponse> result = activeRelationships.stream()
                 .map(RolePermission::getPermissionId)
-                .map(permissions::findByPermissionId)
-                .flatMap(java.util.Optional::stream)
+                .map(permissionById::get)
+                .filter(java.util.Objects::nonNull)
                 .map(permissionMapper::toResponse)
                 .toList();
         log.debug("Role permissions listed [roleId={}] [count={}]", roleId, result.size());
