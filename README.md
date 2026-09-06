@@ -23,6 +23,8 @@ administrative API must not be exposed directly to end users.
 - [AI agent guide](docs/ai-agent-guide.md) — invariants and safe change rules.
 - [Observability and errors](docs/observability.md) — CloudWatch JSON fields,
   Logs Insights queries, correlation, and the API error contract.
+- [Transactional outbox](docs/transactional-outbox.md) — authorization-change
+  event contract, SQS delivery, retries, and auth-service consumer rules.
 
 ## Run locally
 
@@ -41,6 +43,11 @@ export SPRING_DATA_MONGODB_URI='mongodb://localhost:27017/nexus_rbac?replicaSet=
 `local` is the default Spring profile and uses readable console logging. Set a
 non-local profile such as `SPRING_PROFILES_ACTIVE=production` in deployments to
 enable newline-delimited JSON logging for CloudWatch.
+
+Non-local profiles also enable durable authorization-change propagation. Set
+`AUTHORIZATION_EVENTS_QUEUE_URL` to the auth-service SQS queue; startup fails
+when propagation is enabled without a queue URL. The local profile disables the
+outbox dispatcher.
 
 Run verification:
 

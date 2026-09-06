@@ -1,6 +1,7 @@
 package com.designpattern.cognitorbac.audit;
 
 import com.designpattern.cognitorbac.dto.RoleResponse;
+import com.designpattern.cognitorbac.messaging.authorization.AuthorizationChangePublisher;
 import com.designpattern.cognitorbac.permission.PermissionRepository;
 import com.designpattern.cognitorbac.permission.RolePermissionRepository;
 import com.designpattern.cognitorbac.role.NexusRole;
@@ -41,6 +42,7 @@ class AuthorizationAuditAspectTests {
     @Mock private NexusUserRoleRepository userRoles;
     @Mock private PermissionRepository permissions;
     @Mock private RolePermissionRepository rolePermissions;
+    @Mock private AuthorizationChangePublisher authorizationChangePublisher;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private TransactionStatus transactionStatus;
     @Mock private ProceedingJoinPoint joinPoint;
@@ -55,7 +57,7 @@ class AuthorizationAuditAspectTests {
                 .thenAnswer(invocation -> new FieldChange(
                         invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)));
         aspect = new AuthorizationAuditAspect(auditService, fieldChangeMapper, roles, userRoles,
-                permissions, rolePermissions, transactionManager);
+                permissions, rolePermissions, authorizationChangePublisher, transactionManager);
     }
 
     @Test
@@ -67,10 +69,12 @@ class AuthorizationAuditAspectTests {
 
         aspect.auditSuccessfulMutation(joinPoint, authorizationAudit);
 
-        InOrder order = inOrder(joinPoint, auditService, transactionManager);
+        InOrder order = inOrder(joinPoint, auditService, authorizationChangePublisher, transactionManager);
         order.verify(joinPoint).proceed();
         order.verify(auditService).recordAuthorizationChange(eq(AuditAction.ROLE_CREATED), eq("ROLE"),
                 eq("role-1"), eq("admin"), eq("billing:admin"), isNull(), anyList());
+        order.verify(authorizationChangePublisher).enqueue(eq(AuditAction.ROLE_CREATED), eq("ROLE"),
+                eq("role-1"), eq("role-1"), eq("billing:admin"), isNull(), isNull());
         order.verify(transactionManager).commit(transactionStatus);
     }
 
@@ -92,6 +96,29 @@ class AuthorizationAuditAspectTests {
         order.verify(auditService).recordAuthorizationChange(eq(AuditAction.ROLE_CREATED), eq("ROLE"),
                 eq("role-1"), eq("admin"), eq("billing:admin"), isNull(), anyList());
         order.verify(transactionManager).rollback(transactionStatus);
+        verifyNoInteractions(authorizationChangePublisher);
+    }
+
+    @Test
+    void rollsBackMutationAndAuditWhenOutboxPersistenceFails() throws Throwable {
+        RoleResponse role = activeRoleResponse();
+        when(authorizationAudit.operation()).thenReturn(AuthorizationAuditOperation.ROLE_CREATED);
+        when(joinPoint.getArgs()).thenReturn(new Object[0]);
+        when(joinPoint.proceed()).thenReturn(role);
+        doThrow(new DataAccessResourceFailureException("outbox unavailable"))
+                .when(authorizationChangePublisher).enqueue(eq(AuditAction.ROLE_CREATED), eq("ROLE"),
+                        eq("role-1"), eq("role-1"), eq("billing:admin"), isNull(), isNull());
+
+        assertThrows(DataAccessResourceFailureException.class,
+                () -> aspect.auditSuccessfulMutation(joinPoint, authorizationAudit));
+
+        InOrder order = inOrder(joinPoint, auditService, authorizationChangePublisher, transactionManager);
+        order.verify(joinPoint).proceed();
+        order.verify(auditService).recordAuthorizationChange(eq(AuditAction.ROLE_CREATED), eq("ROLE"),
+                eq("role-1"), eq("admin"), eq("billing:admin"), isNull(), anyList());
+        order.verify(authorizationChangePublisher).enqueue(eq(AuditAction.ROLE_CREATED), eq("ROLE"),
+                eq("role-1"), eq("role-1"), eq("billing:admin"), isNull(), isNull());
+        order.verify(transactionManager).rollback(transactionStatus);
     }
 
     @Test
@@ -105,7 +132,7 @@ class AuthorizationAuditAspectTests {
 
         aspect.auditSuccessfulMutation(joinPoint, authorizationAudit);
 
-        verifyNoInteractions(auditService);
+        verifyNoInteractions(auditService, authorizationChangePublisher);
     }
 
     private RoleResponse activeRoleResponse() {

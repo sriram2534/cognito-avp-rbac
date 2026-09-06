@@ -100,6 +100,16 @@ fields @timestamp, operation, awsStatusCode, awsErrorCode, awsRequestId, request
 | sort @timestamp desc
 ```
 
+Outbox events requiring delivery attention:
+
+```text
+fields @timestamp, event, outboxEventId, eventType, attempt, retryDelayMs, failure
+| filter event in ["outbox_event_retry_scheduled", "outbox_event_failed",
+                   "outbox_dispatch_cycle_failed"]
+| sort @timestamp desc
+| limit 100
+```
+
 Consider CloudWatch field indexes for `event`, `requestId`, and `errorCode` on
 high-volume Standard log groups. Do not use high-cardinality values such as
 `requestId`, `userSub`, role IDs, or permission IDs as metric dimensions.

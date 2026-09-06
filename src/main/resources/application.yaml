@@ -30,6 +30,27 @@ cognito:
   app-client-id: ${COGNITO_APP_CLIENT_ID:}
   default-page-size: 25
 
+# ---------------------------------------------------------------------------
+# Transactional outbox -> auth-service SQS queue
+# ---------------------------------------------------------------------------
+# Non-local deployments fail fast when the queue URL is missing. The local
+# profile disables publishing in application-local.yaml.
+messaging:
+  outbox:
+    enabled: ${AUTHORIZATION_EVENTS_ENABLED:true}
+    region: ${AUTHORIZATION_EVENTS_REGION:${COGNITO_REGION:us-east-1}}
+    queue-url: ${AUTHORIZATION_EVENTS_QUEUE_URL:}
+    source: nexus-rbac-admin
+    fifo-message-group-id: authorization-changes
+    poll-interval: 1s
+    batch-size: 10
+    lease-duration: 30s
+    publish-timeout: 10s
+    publish-attempt-timeout: 3s
+    max-attempts: 10
+    initial-retry-delay: 2s
+    max-retry-delay: 5m
+
 management:
   endpoints:
     web:

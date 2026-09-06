@@ -23,7 +23,10 @@ reserved for a separate authorization service that will be implemented later.
    Every audit record must contain authenticated `userSub` and `userEmail`.
 8. Use MapStruct mappers in services rather than manually constructing entities
    or response DTOs.
-9. Do not add event propagation unless it is explicitly requested.
+9. Every session-affecting RBAC mutation captured by `@AuthorizationAudit` must
+   enqueue its `nexus.authorization.changed` event through
+   `TransactionalOutbox`. Never call SQS in the request transaction or publish
+   before commit. Role and permission creation alone do not affect a session.
 10. Do not implement authorization decisions in this service. Keep it private
     until the separate authorization service is available; that service must
     protect management endpoints before they receive production traffic.
@@ -48,6 +51,10 @@ reserved for a separate authorization service that will be implemented later.
 17. Keep role and permission catalog reads paginated. Page size must remain
     bounded at 100, public sort fields must be allowlisted, and every sort must
     end in the external UUID for deterministic page boundaries.
+18. Authorization events are session-invalidation signals for the auth-service,
+    not permission deltas for the future authorization service. Preserve
+    `eventId`, `impactScope`, and `sessionDirective`; the auth-service must
+    deduplicate before changing session validity.
 
 ## Change checklist
 
@@ -77,4 +84,6 @@ git diff --check
 | Request logging and correlation | `observability/RequestLoggingFilter.java`, `observability/RequestLogContext.java` |
 | HTTP and security errors | `exception/GlobalExceptionHandler.java`, `security/SecurityErrorResponseWriter.java` |
 | Declarative audit | `audit/AuthorizationAudit.java`, `audit/AuthorizationAuditAspect.java` |
+| Authorization events | `messaging/authorization/AuthorizationChangePublisher.java` |
+| Reusable Mongo/SQS outbox | `messaging/outbox/` |
 | API | `controller/RoleController.java`, `controller/PermissionController.java` |

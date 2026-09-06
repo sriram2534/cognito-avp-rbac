@@ -1,0 +1,4 @@
+messaging:
+  outbox:
+    # Local development and tests do not require AWS credentials or an SQS queue.
+    enabled: false

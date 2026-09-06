@@ -4,6 +4,7 @@ import com.designpattern.cognitorbac.dto.PermissionResponse;
 import com.designpattern.cognitorbac.dto.RolePermissionResponse;
 import com.designpattern.cognitorbac.dto.RoleResponse;
 import com.designpattern.cognitorbac.dto.UserRoleResponse;
+import com.designpattern.cognitorbac.messaging.authorization.AuthorizationChangePublisher;
 import com.designpattern.cognitorbac.permission.PermissionRepository;
 import com.designpattern.cognitorbac.permission.PermissionStatus;
 import com.designpattern.cognitorbac.permission.RolePermission;
@@ -27,15 +28,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Captures authorization audits after an annotated service mutation returns
- * successfully. It is deliberately internal: it creates no queue messages or
- * outbox records.
+ * Captures authorization audits and transactional outbox messages after an
+ * annotated service mutation returns successfully.
  *
  * <p>The aspect opens the outer MongoDB transaction, captures before-state,
- * executes the service mutation, and persists the audit record before commit.
- * Any audit failure rolls the entire mutation back. The in-transaction snapshot
- * also prevents idempotent or concurrent requests from producing false audit
- * entries.</p>
+ * executes the service mutation, then persists the audit record and, when the
+ * change affects sessions, an outbox message before commit. Any persistence
+ * failure rolls the entire mutation back. The in-transaction snapshot also
+ * prevents idempotent or concurrent requests from producing false audit or
+ * integration events.</p>
  */
 @Aspect
 @Component
@@ -47,11 +48,13 @@ public class AuthorizationAuditAspect {
     private final NexusUserRoleRepository userRoles;
     private final PermissionRepository permissions;
     private final RolePermissionRepository rolePermissions;
+    private final AuthorizationChangePublisher authorizationChangePublisher;
     private final TransactionTemplate transactionTemplate;
 
     public AuthorizationAuditAspect(AuditService auditService, FieldChangeMapper fieldChangeMapper,
                                    NexusRoleRepository roles, NexusUserRoleRepository userRoles,
                                    PermissionRepository permissions, RolePermissionRepository rolePermissions,
+                                   AuthorizationChangePublisher authorizationChangePublisher,
                                    PlatformTransactionManager transactionManager) {
         this.auditService = auditService;
         this.fieldChangeMapper = fieldChangeMapper;
@@ -59,6 +62,7 @@ public class AuthorizationAuditAspect {
         this.userRoles = userRoles;
         this.permissions = permissions;
         this.rolePermissions = rolePermissions;
+        this.authorizationChangePublisher = authorizationChangePublisher;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -156,7 +160,8 @@ public class AuthorizationAuditAspect {
     }
 
     private void recordCreatedRole(RoleResponse role) {
-        record(AuditAction.ROLE_CREATED, "ROLE", role.roleId(), role.name(), role.roleKey(), null, List.of(
+        record(AuditAction.ROLE_CREATED, "ROLE", role.roleId(), role.roleId(), role.name(), role.roleKey(), null,
+                null, List.of(
                 change("roleKey", null, role.roleKey()), change("status", null, role.status().name())));
     }
 
@@ -166,7 +171,7 @@ public class AuthorizationAuditAspect {
         }
         AuditAction action = operation == AuthorizationAuditOperation.ROLE_ACTIVATED
                 ? AuditAction.ROLE_ACTIVATED : AuditAction.ROLE_DEACTIVATED;
-        record(action, "ROLE", role.roleId(), role.name(), role.roleKey(), null,
+        record(action, "ROLE", role.roleId(), role.roleId(), role.name(), role.roleKey(), null, null,
                 List.of(change("status", snapshot.roleStatus().name(), role.status().name())));
     }
 
@@ -179,7 +184,7 @@ public class AuthorizationAuditAspect {
             AuditAction action = before == NexusUserRoleStatus.REMOVED
                     ? AuditAction.USER_ROLE_RESTORED : AuditAction.USER_ROLE_ASSIGNED;
             record(action, "USER_ROLE", relationship.userSub() + ":" + relationship.roleId(),
-                    snapshot.roleName(), snapshot.roleKey(), null,
+                    relationship.roleId(), snapshot.roleName(), snapshot.roleKey(), null, relationship.userSub(),
                     List.of(change("targetUserSub", null, relationship.userSub()), change("operation", null, "ADDED")));
         }
     }
@@ -189,13 +194,13 @@ public class AuthorizationAuditAspect {
             return;
         }
         record(AuditAction.USER_ROLE_REMOVED, "USER_ROLE", snapshot.userSub() + ":" + snapshot.roleId(),
-                snapshot.roleName(), snapshot.roleKey(), null,
+                snapshot.roleId(), snapshot.roleName(), snapshot.roleKey(), null, snapshot.userSub(),
                 List.of(change("targetUserSub", null, snapshot.userSub()), change("operation", null, "REMOVED")));
     }
 
     private void recordCreatedPermission(PermissionResponse permission) {
-        record(AuditAction.PERMISSION_CREATED, "PERMISSION", permission.permissionId(), null, null,
-                permission.permissionId(), List.of(
+        record(AuditAction.PERMISSION_CREATED, "PERMISSION", permission.permissionId(), null, null, null,
+                permission.permissionId(), null, List.of(
                 change("module", null, permission.module()), change("resourceType", null, permission.resourceType()),
                 change("access", null, permission.access()), change("status", null, permission.status().name())));
     }
@@ -207,7 +212,7 @@ public class AuthorizationAuditAspect {
         }
         AuditAction action = operation == AuthorizationAuditOperation.PERMISSION_ACTIVATED
                 ? AuditAction.PERMISSION_ACTIVATED : AuditAction.PERMISSION_DEACTIVATED;
-        record(action, "PERMISSION", permission.permissionId(), null, null, permission.permissionId(),
+        record(action, "PERMISSION", permission.permissionId(), null, null, null, permission.permissionId(), null,
                 List.of(change("status", snapshot.permissionStatus().name(), permission.status().name())));
     }
 
@@ -219,7 +224,7 @@ public class AuthorizationAuditAspect {
         AuditAction action = before == RolePermissionStatus.REVOKED
                 ? AuditAction.ROLE_PERMISSION_RESTORED : AuditAction.ROLE_PERMISSION_GRANTED;
         record(action, "ROLE_PERMISSION", relationship.roleId() + ":" + relationship.permissionId(),
-                snapshot.roleName(), snapshot.roleKey(), relationship.permissionId(),
+                relationship.roleId(), snapshot.roleName(), snapshot.roleKey(), relationship.permissionId(), null,
                 List.of(change("status", before == null ? null : before.name(), "ACTIVE")));
     }
 
@@ -229,15 +234,17 @@ public class AuthorizationAuditAspect {
             return;
         }
         record(AuditAction.ROLE_PERMISSION_REVOKED, "ROLE_PERMISSION", snapshot.roleId() + ":" + snapshot.permissionId(),
-                snapshot.roleName(), snapshot.roleKey(), snapshot.permissionId(),
+                snapshot.roleId(), snapshot.roleName(), snapshot.roleKey(), snapshot.permissionId(), null,
                 List.of(change("status", "ACTIVE", "REVOKED")));
     }
 
-    private void record(AuditAction action, String aggregateType, String aggregateId, String roleName, String roleKey,
-                        String permissionId,
+    private void record(AuditAction action, String aggregateType, String aggregateId, String roleId,
+                        String roleName, String roleKey, String permissionId, String targetUserSub,
                         List<FieldChange> changes) {
         auditService.recordAuthorizationChange(
                 action, aggregateType, aggregateId, roleName, roleKey, permissionId, changes);
+        authorizationChangePublisher.enqueue(
+                action, aggregateType, aggregateId, roleId, roleKey, permissionId, targetUserSub);
     }
 
     private FieldChange change(String field, Object before, Object after) {

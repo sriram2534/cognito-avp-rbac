@@ -10,3 +10,7 @@ spring:
   data:
     mongodb:
       auto-index-creation: false
+
+messaging:
+  outbox:
+    enabled: false

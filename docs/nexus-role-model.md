@@ -11,6 +11,7 @@
 | Permissions | MongoDB `nexus_permissions` |
 | Role-to-permission assignment | MongoDB `nexus_role_permissions` |
 | Audit history | MongoDB `audit_entries` |
+| Pending integration events | MongoDB `outbox_events` |
 | Runtime allow/deny decision | Future external authorization service |
 
 This service never creates, reads, or mutates Cognito groups. It lists and
@@ -268,13 +269,16 @@ case after a short delay.
 
 Mutating service methods declare their audit intent with `@AuthorizationAudit`.
 `AuthorizationAuditAspect` opens the outer MongoDB transaction, snapshots the
-required before-state, executes the mutation, and persists the audit document.
-The mutation and audit document commit together. An audit failure rolls the
-mutation back, while idempotent requests do not create audit records. Reads are
-not audited, and the project contains no queue, SNS, or outbox implementation.
+required before-state, executes the mutation, persists the audit document, and
+enqueues an authorization-change outbox event when the change can affect an
+existing session. The mutation, audit document, and applicable outbox document
+commit together. Failure of either companion write rolls the mutation back,
+while idempotent requests create neither audit nor outbox records. Reads are not
+audited. A background dispatcher later sends committed outbox events to the
+auth-service SQS queue without extending request latency.
 Bulk user assignment snapshots existing relationships with one set-based query,
-then writes new/restored relationships in a batch before their audit records are
-committed.
+then writes new/restored relationships in a batch before their audit and outbox
+records are committed.
 
 Every new audit document contains the authenticated caller's mandatory
 `userSub` and `userEmail`. Role-related events contain both `roleName` (for
@@ -291,6 +295,11 @@ The audit filter captures only:
 
 Role metadata changes and permission-description changes are intentionally not
 captured by this filter.
+
+The same captured session-affecting changes publish invalidation events. Role
+or permission creation alone has no affected session and does not publish. See
+[transactional-outbox.md](transactional-outbox.md) for the event matrix,
+delivery guarantees, configuration, and consumer contract.
 
 Existing audit documents using `group_name`, `actor_sub`, or `actor_email`
 require the one-time migration described in
