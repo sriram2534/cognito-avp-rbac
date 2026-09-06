@@ -1,6 +1,7 @@
 package com.designpattern.cognitorbac.audit;
 
 import com.designpattern.cognitorbac.security.CallerContext;
+import com.designpattern.cognitorbac.observability.RequestLogContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,7 +12,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * Servlet filter that runs once per request to populate {@link AuditContext}
@@ -26,11 +26,10 @@ import java.util.UUID;
 public class AuditContextFilter extends OncePerRequestFilter {
 
     public static final String AUDIT_REASON_HEADER = "X-Audit-Reason";
-    public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
+    public static final String CORRELATION_ID_HEADER = RequestLogContext.CORRELATION_ID_HEADER;
     private static final Set<String> AUDITED_API_PREFIXES = Set.of(
             "/api/v1/roles",
             "/api/v1/permissions",
-            "/api/v1/policies",
             "/api/v1/users"
     );
     private static final Set<String> AUDITED_HTTP_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
@@ -59,20 +58,14 @@ public class AuditContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String requestId = correlationId(request);
+        String requestId = RequestLogContext.getOrCreateRequestId(request);
         try {
-            String reason     = request.getHeader(AUDIT_REASON_HEADER);
+            String reason = request.getHeader(AUDIT_REASON_HEADER);
             String userSub = callerContext.getUserSub();
             String userEmail = callerContext.getUserEmail();
 
-            MDC.put("requestId", requestId);
-            MDC.put("correlationId", requestId);
             MDC.put("userSub", userSub != null ? userSub : "anonymous");
-            MDC.put("userEmail", userEmail != null ? userEmail : "unknown");
-            MDC.put("httpMethod", request.getMethod());
-            MDC.put("httpPath",   request.getRequestURI());
-
-            response.setHeader("X-Request-Id", requestId);
+            request.setAttribute(RequestLogContext.USER_SUB_ATTRIBUTE, userSub);
 
             // The request ID is the correlation ID for this service. It is also
             // returned to callers, so audit records can be correlated.
@@ -80,21 +73,7 @@ public class AuditContextFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             AuditContext.clear();
-            MDC.remove("requestId");
-            MDC.remove("correlationId");
             MDC.remove("userSub");
-            MDC.remove("userEmail");
-            MDC.remove("httpMethod");
-            MDC.remove("httpPath");
         }
     }
-
-    private String correlationId(HttpServletRequest request) {
-        String inbound = request.getHeader(CORRELATION_ID_HEADER);
-        if (inbound != null && inbound.matches("[A-Za-z0-9._-]{1,128}")) {
-            return inbound;
-        }
-        return UUID.randomUUID().toString();
-    }
-
 }

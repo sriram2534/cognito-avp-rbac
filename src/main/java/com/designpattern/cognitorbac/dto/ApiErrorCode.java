@@ -1,0 +1,20 @@
+package com.designpattern.cognitorbac.dto;
+
+/** Stable machine-readable codes for API clients and CloudWatch queries. */
+public enum ApiErrorCode {
+    AUTHENTICATION_REQUIRED,
+    ACCESS_DENIED,
+    RESOURCE_NOT_FOUND,
+    RESOURCE_CONFLICT,
+    CONCURRENT_MODIFICATION,
+    VALIDATION_FAILED,
+    MALFORMED_REQUEST,
+    MISSING_REQUIRED_VALUE,
+    METHOD_NOT_ALLOWED,
+    UNSUPPORTED_MEDIA_TYPE,
+    NOT_ACCEPTABLE,
+    DATA_STORE_UNAVAILABLE,
+    UPSTREAM_IDENTITY_PROVIDER_ERROR,
+    AUDIT_UNAVAILABLE,
+    INTERNAL_ERROR
+}

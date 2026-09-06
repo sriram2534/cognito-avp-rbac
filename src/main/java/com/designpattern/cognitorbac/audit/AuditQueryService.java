@@ -1,8 +1,6 @@
 package com.designpattern.cognitorbac.audit;
 
 import com.designpattern.cognitorbac.exception.AuditException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -35,8 +33,6 @@ import java.util.List;
 @Service
 public class AuditQueryService {
 
-    private static final Logger log = LoggerFactory.getLogger(AuditQueryService.class);
-
     private final MongoTemplate mongo;
 
     public AuditQueryService(MongoTemplate mongo) {
@@ -64,12 +60,10 @@ public class AuditQueryService {
             List<AuditEntry> results = mongo.find(query, AuditEntry.class);
             return new PageImpl<>(results, pageable, total);
         } catch (DataAccessException ex) {
-            log.error("MongoDB query failed for audit search filter={}", filter, ex);
             throw new AuditException("Audit query failed — storage unavailable", ex);
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("Unexpected error during audit search", ex);
             throw new AuditException("Audit query encountered an unexpected error", ex);
         }
     }

@@ -2,11 +2,14 @@ package com.designpattern.cognitorbac.controller;
 
 import com.designpattern.cognitorbac.audit.AuditContextFilter;
 import com.designpattern.cognitorbac.dto.CreatePermissionRequest;
+import com.designpattern.cognitorbac.dto.PageResponse;
 import com.designpattern.cognitorbac.dto.PermissionResponse;
 import com.designpattern.cognitorbac.dto.RolePermissionResponse;
 import com.designpattern.cognitorbac.dto.UpdatePermissionRequest;
 import com.designpattern.cognitorbac.service.PermissionService;
 import com.designpattern.cognitorbac.service.RolePermissionService;
+import com.designpattern.cognitorbac.permission.PermissionFilter;
+import com.designpattern.cognitorbac.permission.PermissionStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,8 +44,18 @@ public class PermissionController {
     }
 
     @GetMapping
-    public List<PermissionResponse> list() {
-        return permissionService.list();
+    public PageResponse<PermissionResponse> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String module,
+            @RequestParam(required = false) String resourceType,
+            @RequestParam(required = false) String access,
+            @RequestParam(required = false) PermissionStatus status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "displayKey") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
+        return permissionService.list(new PermissionFilter(module, resourceType, access, status, search),
+                page, size, sortBy, direction);
     }
 
     @GetMapping("/{permissionId}")

@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -39,24 +41,28 @@ public class AuditService {
                                           String roleName, String roleKey, String permissionId,
                                           List<FieldChange> changes) {
         if (!auditActionFilter.shouldCapture(action)) {
-            log.debug("Audit action filtered [action={}]", action);
+            log.atDebug().addKeyValue("event", "audit_action_filtered")
+                    .addKeyValue("auditAction", action)
+                    .log("Audit action filtered");
             return;
         }
         AuditContext ctx = requiredContext();
         AuditEntry entry = auditEntryMapper.toAuthorizationEntry(
                 action, aggregateType, aggregateId, roleName, roleKey, permissionId, ctx, changes);
         repository.save(entry);
-        log.info("Authorization source audited [action={}] [aggregateType={}] [aggregateId={}] "
-                        + "[roleName={}] [roleKey={}] [permissionId={}] [userSub={}] [userEmail={}]",
-                action, aggregateType, aggregateId, roleName, roleKey, permissionId,
-                ctx.getUserSub(), ctx.getUserEmail());
+        afterCommit(() -> log.atInfo()
+                .addKeyValue("event", "authorization_audit_committed")
+                .addKeyValue("auditAction", action)
+                .addKeyValue("aggregateType", aggregateType)
+                .addKeyValue("aggregateId", aggregateId)
+                .addKeyValue("roleName", roleName)
+                .addKeyValue("roleKey", roleKey)
+                .addKeyValue("permissionId", permissionId)
+                .addKeyValue("actorUserSub", ctx.getUserSub())
+                .log("Authorization audit committed"));
     }
 
     // ─── Query API ───────────────────────────────────────────────────────────────
-
-    public Page<AuditEntry> findByRole(String roleName, Pageable pageable) {
-        return repository.findByRoleName(roleName, pageable);
-    }
 
     public Page<AuditEntry> findByUser(String userSub, Pageable pageable) {
         return repository.findByUserSub(userSub, pageable);
@@ -66,16 +72,8 @@ public class AuditService {
         return repository.findByAction(action, pageable);
     }
 
-    public Page<AuditEntry> findByRoleAndAction(String roleName, AuditAction action, Pageable pageable) {
-        return repository.findByRoleNameAndAction(roleName, action, pageable);
-    }
-
     public Page<AuditEntry> findByTimeRange(Instant from, Instant to, Pageable pageable) {
         return repository.findByOccurredAtBetween(from, to, pageable);
-    }
-
-    public List<AuditEntry> recentForRole(String roleName) {
-        return repository.findTop50ByRoleNameOrderByOccurredAtDesc(roleName);
     }
 
     private AuditContext requiredContext() {
@@ -88,5 +86,18 @@ public class AuditService {
             throw new IllegalArgumentException(AuditContextFilter.AUDIT_REASON_HEADER + " must not be blank");
         }
         return context;
+    }
+
+    private void afterCommit(Runnable event) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            event.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                event.run();
+            }
+        });
     }
 }

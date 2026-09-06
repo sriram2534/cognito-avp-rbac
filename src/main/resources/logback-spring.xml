@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="cognito-rbac"/>
+    <springProperty scope="context" name="environment" source="deployment.environment" defaultValue="local"/>
+    <springProperty scope="context" name="applicationLogLevel"
+                    source="logging.level.com.designpattern.cognitorbac" defaultValue="INFO"/>
+
     <!--
         LOCAL profile: human-readable coloured output for development.
-        Activate with: SPRING_PROFILES_ACTIVE=local
+        This is also the default profile configured in application.yaml.
     -->
     <springProfile name="local">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -19,11 +24,12 @@
 
     <!--
         Default (all non-local environments): structured JSON output consumed by CloudWatch.
-        Active whenever SPRING_PROFILES_ACTIVE is not set to 'local' — no env var needed in AWS.
+        Active whenever SPRING_PROFILES_ACTIVE does not include 'local'. Deployments
+        must explicitly activate a profile such as dev, staging, or production.
 
         Each log line is a single-line JSON object. CloudWatch Logs Insights
         can query any field directly — e.g.:
-            fields @timestamp, level, message, requestId, userSub, userEmail, auditAction
+            fields @timestamp, level, event, requestId, userSub, errorCode, auditAction
             | filter level = "ERROR"
             | sort @timestamp desc
     -->
@@ -38,12 +44,17 @@
                     <thread>thread</thread>
                     <level>level</level>
                     <levelValue>[ignore]</levelValue>
+                    <version>[ignore]</version>
                 </fieldNames>
 
+                <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSSXXX</timestampPattern>
+                <timeZone>UTC</timeZone>
+
                 <!-- App-level fields on every line -->
-                <customFields>{"service":"cognito-rbac","environment":"aws"}</customFields>
+                <customFields>{"schemaVersion":"1","service":"${serviceName}","environment":"${environment}"}</customFields>
 
                 <!-- MDC fields are promoted to top-level JSON fields automatically -->
+                <includeContext>false</includeContext>
                 <includeMdc>true</includeMdc>
 
                 <!-- SLF4J key-value pairs (log.atInfo().addKeyValue(...)) promoted too -->
@@ -64,8 +75,7 @@
     </springProfile>
 
     <!-- Package-level overrides apply in both profiles -->
-    <logger name="com.designpattern.cognitorbac" level="INFO"/>
-    <logger name="com.designpattern.cognitorbac.audit" level="DEBUG"/>
+    <logger name="com.designpattern.cognitorbac" level="${applicationLogLevel}"/>
     <logger name="software.amazon.awssdk" level="WARN"/>
     <logger name="org.springframework.data.mongodb" level="WARN"/>
 

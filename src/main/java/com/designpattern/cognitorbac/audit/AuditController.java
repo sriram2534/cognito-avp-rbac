@@ -39,9 +39,9 @@ public class AuditController {
      * <p>Examples:
      * <pre>
      *   GET /api/v1/audit/search?roleKey=ops:developer
-     *   GET /api/v1/audit/search?userSub=uuid-123&actions=ROLE_CREATED,ROLE_UPDATED
+     *   GET /api/v1/audit/search?userSub=uuid-123&actions=ROLE_CREATED,ROLE_DEACTIVATED
      *   GET /api/v1/audit/search?changedField=email&from=2026-08-01T00:00:00Z
-     *   GET /api/v1/audit/search?actions=USER_DISABLED,USER_ENABLED&from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z
+     *   GET /api/v1/audit/search?actions=USER_ROLE_ASSIGNED,USER_ROLE_REMOVED&from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z
      * </pre>
      * </p>
      */

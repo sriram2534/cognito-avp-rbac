@@ -12,14 +12,17 @@ Cognito user (`sub`)
   -> nexus_permissions
 ```
 
-The service does not make application authorization decisions. The external
-authorization service enforces access at the API gateway or service boundary.
+The service does not make application authorization decisions. A separate
+authorization service will be implemented later. Until it is deployed, this
+administrative API must not be exposed directly to end users.
 
 ## Documentation
 
 - [Nexus role model](docs/nexus-role-model.md) — collections, indexes, API,
   aggregation design, declarative audit, and migration guidance.
 - [AI agent guide](docs/ai-agent-guide.md) — invariants and safe change rules.
+- [Observability and errors](docs/observability.md) — CloudWatch JSON fields,
+  Logs Insights queries, correlation, and the API error contract.
 
 ## Run locally
 
@@ -35,6 +38,10 @@ export SPRING_DATA_MONGODB_URI='mongodb://localhost:27017/nexus_rbac?replicaSet=
 ./mvnw spring-boot:run
 ```
 
+`local` is the default Spring profile and uses readable console logging. Set a
+non-local profile such as `SPRING_PROFILES_ACTIVE=production` in deployments to
+enable newline-delimited JSON logging for CloudWatch.
+
 Run verification:
 
 ```bash
@@ -42,9 +49,10 @@ Run verification:
 ```
 
 `GET /actuator/health` is public. Other routes require a Cognito access token
-with `sub`, `email`, and the configured client ID. The external authorization
-service must protect administrative access before traffic reaches this
-application.
+with `sub`, `email`, and the configured client ID. Authentication is not
+administrative authorization: use private ingress now, and require the future
+authorization service to protect all administrative routes before production
+traffic reaches this application.
 
 User-role assignment accepts at most 50 canonical Cognito `sub` UUIDs. Each
 distinct subject is resolved by exact `sub` search and confirmed through

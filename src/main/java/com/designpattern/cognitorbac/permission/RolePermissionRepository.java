@@ -10,5 +10,4 @@ public interface RolePermissionRepository extends MongoRepository<RolePermission
     List<RolePermission> findByRoleIdAndStatus(String roleId, RolePermissionStatus status);
     List<RolePermission> findByPermissionIdAndStatus(String permissionId, RolePermissionStatus status);
     List<RolePermission> findByPermissionId(String permissionId);
-    long countByRoleIdAndStatus(String roleId, RolePermissionStatus status);
 }

@@ -6,8 +6,6 @@ import com.designpattern.cognitorbac.dto.UserResponse;
 import com.designpattern.cognitorbac.exception.CognitoIntegrationException;
 import com.designpattern.cognitorbac.exception.ResourceNotFoundException;
 import com.designpattern.cognitorbac.mapper.CognitoMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest;
@@ -25,7 +23,6 @@ import java.util.Objects;
 /** Cognito identity reads. Nexus role membership is read from MongoDB. */
 @Service
 public class UserService {
-    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private final CognitoIdentityProviderClient cognito;
     private final CognitoProperties properties;
     private final CognitoMapper mapper;
@@ -81,8 +78,6 @@ public class UserService {
     }
 
     private CognitoIntegrationException wrap(String operation, CognitoIdentityProviderException ex) {
-        log.error("Cognito {} failed: {}", operation, ex.awsErrorDetails() != null
-                ? ex.awsErrorDetails().errorMessage() : ex.getMessage());
-        return new CognitoIntegrationException("Cognito operation failed: " + operation, ex);
+        return new CognitoIntegrationException(operation, "Cognito operation failed: " + operation, ex);
     }
 }

@@ -3,8 +3,8 @@
 ## Purpose
 
 This is a Nexus authorization-source administration service. Cognito owns user
-identity; MongoDB owns roles and permissions; an external authorization service
-owns runtime allow/deny decisions.
+identity; MongoDB owns roles and permissions. Runtime allow/deny decisions are
+reserved for a separate authorization service that will be implemented later.
 
 ## Non-negotiable rules
 
@@ -24,8 +24,9 @@ owns runtime allow/deny decisions.
 8. Use MapStruct mappers in services rather than manually constructing entities
    or response DTOs.
 9. Do not add event propagation unless it is explicitly requested.
-10. Do not implement authorization decisions in this service. The gateway or
-    external authorization service must protect management endpoints.
+10. Do not implement authorization decisions in this service. Keep it private
+    until the separate authorization service is available; that service must
+    protect management endpoints before they receive production traffic.
 11. Before assigning users to a role, validate each distinct canonical Cognito
     `sub` with `CognitoUserDirectory`. Keep that remote validation outside the
     audited MongoDB transaction; `@ValidateCognitoUserSubs` provides the current
@@ -35,6 +36,18 @@ owns runtime allow/deny decisions.
     lookups inside mapping streams.
 13. Maintain `RolePermission.validFrom` and `validUntil` through the domain
     methods: grant/restore opens a validity window and revoke closes it.
+14. Operational logs must use SLF4J key-value fields and a stable `event` name.
+    Do not place identifiers only inside formatted message text, log request
+    bodies/tokens, or log the same exception in both service and HTTP layers.
+15. `GlobalExceptionHandler` owns stack-trace logging for controller failures.
+    Every error response must include a stable `ApiErrorCode` and `requestId`.
+    Security-filter failures must use `SecurityErrorResponseWriter`.
+16. Emit mutation success only after commit. `AuditService` registers its
+    CloudWatch event through transaction synchronization; do not add a service
+    log before the Mongo transaction has committed.
+17. Keep role and permission catalog reads paginated. Page size must remain
+    bounded at 100, public sort fields must be allowlisted, and every sort must
+    end in the external UUID for deterministic page boundaries.
 
 ## Change checklist
 
@@ -61,5 +74,7 @@ git diff --check
 | Role and membership workflow | `service/RoleService.java` |
 | Role-permission workflow | `service/RolePermissionService.java` |
 | Cognito assignment validation | `service/CognitoUserDirectory.java`, `service/CognitoUserValidationAspect.java` |
+| Request logging and correlation | `observability/RequestLoggingFilter.java`, `observability/RequestLogContext.java` |
+| HTTP and security errors | `exception/GlobalExceptionHandler.java`, `security/SecurityErrorResponseWriter.java` |
 | Declarative audit | `audit/AuthorizationAudit.java`, `audit/AuthorizationAuditAspect.java` |
 | API | `controller/RoleController.java`, `controller/PermissionController.java` |

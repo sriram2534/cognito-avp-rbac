@@ -1,6 +1,10 @@
 package com.designpattern.cognitorbac.config;
 
 import com.designpattern.cognitorbac.security.CognitoAccessTokenValidator;
+import com.designpattern.cognitorbac.audit.AuditContextFilter;
+import com.designpattern.cognitorbac.security.RestAccessDeniedHandler;
+import com.designpattern.cognitorbac.security.RestAuthenticationEntryPoint;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,6 +19,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +32,8 @@ import java.util.List;
  *   <li>Stateless session management (no server-side sessions).</li>
  *   <li>Signature validation against the Cognito JWKS endpoint.</li>
  *   <li>Issuer, expiry, audience, access-token, and audit-identity validation.</li>
- *   <li>Authorization is enforced by the external authorization service or API gateway.</li>
+ *   <li>This service performs authentication only. Administrative authorization belongs
+ *       to the separate authorization service and must be enforced before production traffic arrives.</li>
  * </ul>
  */
 @Configuration
@@ -36,10 +42,19 @@ public class SecurityConfig {
 
     private final CognitoProperties properties;
     private final CognitoAccessTokenValidator accessTokenValidator;
+    private final AuditContextFilter auditContextFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
+    private final RestAccessDeniedHandler accessDeniedHandler;
 
-    public SecurityConfig(CognitoProperties properties, CognitoAccessTokenValidator accessTokenValidator) {
+    public SecurityConfig(CognitoProperties properties, CognitoAccessTokenValidator accessTokenValidator,
+                          AuditContextFilter auditContextFilter,
+                          RestAuthenticationEntryPoint authenticationEntryPoint,
+                          RestAccessDeniedHandler accessDeniedHandler) {
         this.properties = properties;
         this.accessTokenValidator = accessTokenValidator;
+        this.auditContextFilter = auditContextFilter;
+        this.authenticationEntryPoint = authenticationEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
     }
 
     @Bean
@@ -50,9 +65,23 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .addFilterAfter(auditContextFilter, BearerTokenAuthenticationFilter.class);
         return http.build();
+    }
+
+    /** AuditContextFilter must run inside Spring Security after JWT authentication, not as a container filter. */
+    @Bean
+    FilterRegistrationBean<AuditContextFilter> auditContextFilterRegistration(AuditContextFilter filter) {
+        FilterRegistrationBean<AuditContextFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

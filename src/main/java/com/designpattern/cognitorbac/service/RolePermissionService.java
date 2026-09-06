@@ -73,14 +73,15 @@ public class RolePermissionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Role permission relationship not found for role " + roleId));
         if (relationship.getStatus() == RolePermissionStatus.REVOKED) {
-            log.info("Role permission revocation is idempotent [roleId={}] [permissionId={}]",
-                    role.getRoleId(), permissionId);
+            log.atDebug().addKeyValue("event", "role_permission_revoke_skipped")
+                    .addKeyValue("roleId", role.getRoleId())
+                    .addKeyValue("permissionId", permissionId)
+                    .addKeyValue("reason", "NO_CHANGE")
+                    .log("Role permission revocation skipped");
             return;
         }
         relationship.revoke(PermissionService.actorSub());
         relationships.save(relationship);
-        log.info("Role permission revoked [rolePermissionId={}] [roleId={}] [permissionId={}]",
-                relationship.getId(), role.getRoleId(), permissionId);
     }
 
     public List<PermissionResponse> permissionsForRole(String roleId) {
@@ -97,7 +98,10 @@ public class RolePermissionService {
                 .filter(java.util.Objects::nonNull)
                 .map(permissionMapper::toResponse)
                 .toList();
-        log.debug("Role permissions listed [roleId={}] [count={}]", roleId, result.size());
+        log.atDebug().addKeyValue("event", "role_permissions_listed")
+                .addKeyValue("roleId", roleId)
+                .addKeyValue("resultCount", result.size())
+                .log("Role permissions listed");
         return result;
     }
 
@@ -107,19 +111,16 @@ public class RolePermissionService {
         }
         List<RolePermissionResponse> result = relationships.findByPermissionIdAndStatus(permissionId, RolePermissionStatus.ACTIVE).stream()
                 .map(rolePermissionMapper::toResponse).toList();
-        log.debug("Roles for permission listed [permissionId={}] [count={}]", permissionId, result.size());
+        log.atDebug().addKeyValue("event", "permission_roles_listed")
+                .addKeyValue("permissionId", permissionId)
+                .addKeyValue("resultCount", result.size())
+                .log("Roles for permission listed");
         return result;
-    }
-
-    public boolean hasActivePermissions(String roleId) {
-        return relationships.countByRoleIdAndStatus(roleId, RolePermissionStatus.ACTIVE) > 0;
     }
 
     private RolePermission create(NexusRole role, String permissionId) {
         RolePermission relationship = relationships.save(
                 rolePermissionMapper.toEntity(role.getRoleId(), permissionId, PermissionService.actorSub()));
-        log.info("Role permission granted [rolePermissionId={}] [roleId={}] [permissionId={}]",
-                relationship.getId(), role.getRoleId(), permissionId);
         return relationship;
     }
 
@@ -129,8 +130,6 @@ public class RolePermissionService {
         }
         relationship.restore(PermissionService.actorSub());
         relationships.save(relationship);
-        log.info("Role permission restored [rolePermissionId={}] [roleId={}] [permissionId={}]",
-                relationship.getId(), role.getRoleId(), relationship.getPermissionId());
         return relationship;
     }
 

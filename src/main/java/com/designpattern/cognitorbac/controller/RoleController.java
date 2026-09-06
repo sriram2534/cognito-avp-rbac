@@ -4,12 +4,15 @@ import com.designpattern.cognitorbac.audit.AuditContextFilter;
 import com.designpattern.cognitorbac.dto.AddUsersToRoleRequest;
 import com.designpattern.cognitorbac.dto.CreateRoleRequest;
 import com.designpattern.cognitorbac.dto.PermissionResponse;
+import com.designpattern.cognitorbac.dto.PageResponse;
 import com.designpattern.cognitorbac.dto.RolePermissionResponse;
 import com.designpattern.cognitorbac.dto.RoleResponse;
 import com.designpattern.cognitorbac.dto.UpdateRoleRequest;
 import com.designpattern.cognitorbac.dto.UserRoleResponse;
 import com.designpattern.cognitorbac.service.RolePermissionService;
 import com.designpattern.cognitorbac.service.RoleService;
+import com.designpattern.cognitorbac.role.NexusRoleStatus;
+import com.designpattern.cognitorbac.role.RoleFilter;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -43,8 +47,15 @@ public class RoleController {
     }
 
     @GetMapping
-    public List<RoleResponse> list() {
-        return roleService.list();
+    public PageResponse<RoleResponse> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String module,
+            @RequestParam(required = false) NexusRoleStatus status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "module") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
+        return roleService.list(new RoleFilter(module, status, search), page, size, sortBy, direction);
     }
 
     @GetMapping("/{roleId}")

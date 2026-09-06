@@ -15,6 +15,8 @@ import java.util.UUID;
 @Document(collection = "nexus_roles")
 @CompoundIndex(name = "ux_nexus_role_coordinates", def = "{'module': 1, 'name': 1}", unique = true)
 @CompoundIndex(name = "ix_nexus_roles_by_module_status", def = "{'module': 1, 'status': 1}")
+@CompoundIndex(name = "ix_nexus_roles_catalog", def = "{'status': 1, 'module': 1, 'name': 1, 'roleId': 1}")
+@CompoundIndex(name = "ix_nexus_roles_catalog_order", def = "{'module': 1, 'name': 1, 'roleId': 1}")
 public class NexusRole {
 
     @Id

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API for reading Cognito users and their group memberships.
+ * REST API for reading Cognito users and their database-owned Nexus roles.
  *
  * <p>All endpoints require a valid Cognito JWT (any authenticated user).</p>
  */
@@ -43,7 +43,7 @@ public class UserController {
     }
 
     /**
-     * Fetches a single user with full detail and group memberships.
+     * Fetches a single user with full detail and active Nexus role keys.
      */
     @GetMapping("/{username}")
     public ResponseEntity<UserResponse> getUser(@PathVariable String username) {

@@ -1,12 +1,20 @@
 spring:
   application:
     name: cognito-rbac
+  profiles:
+    # Local is the safe default for developer workstations and tests. Deployments
+    # must activate a non-local profile (for example, dev/staging/production),
+    # which switches Logback to newline-delimited JSON for CloudWatch ingestion.
+    default: local
   data:
     mongodb:
       auto-index-creation: true
 
 server:
   port: 8080
+
+deployment:
+  environment: ${DEPLOYMENT_ENVIRONMENT:local}
 
 # ---------------------------------------------------------------------------
 # AWS Cognito integration
@@ -34,5 +42,5 @@ management:
 
 logging:
   level:
-    com.designpattern.cognitorbac: INFO
+    com.designpattern.cognitorbac: ${APPLICATION_LOG_LEVEL:INFO}
     software.amazon.awssdk: WARN

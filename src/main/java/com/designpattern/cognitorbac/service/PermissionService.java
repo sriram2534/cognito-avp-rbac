@@ -4,12 +4,14 @@ import com.designpattern.cognitorbac.audit.AuditContext;
 import com.designpattern.cognitorbac.audit.AuthorizationAudit;
 import com.designpattern.cognitorbac.audit.AuthorizationAuditOperation;
 import com.designpattern.cognitorbac.dto.CreatePermissionRequest;
+import com.designpattern.cognitorbac.dto.PageResponse;
 import com.designpattern.cognitorbac.dto.PermissionResponse;
 import com.designpattern.cognitorbac.dto.UpdatePermissionRequest;
 import com.designpattern.cognitorbac.exception.ResourceConflictException;
 import com.designpattern.cognitorbac.exception.ResourceNotFoundException;
 import com.designpattern.cognitorbac.mapper.PermissionMapper;
 import com.designpattern.cognitorbac.permission.Permission;
+import com.designpattern.cognitorbac.permission.PermissionFilter;
 import com.designpattern.cognitorbac.permission.PermissionRepository;
 import com.designpattern.cognitorbac.permission.PermissionStatus;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Owns reusable permission documents. Coordinates are immutable because they
@@ -28,6 +31,14 @@ import java.util.Locale;
 public class PermissionService {
     private static final Logger log = LoggerFactory.getLogger(PermissionService.class);
     private static final List<String> SUPPORTED_ACCESS = List.of("read", "write", "export", "approve", "manage");
+    private static final Map<String, List<String>> SORTS = Map.of(
+            "displayKey", List.of("module", "resourceType", "access", "permissionId"),
+            "module", List.of("module", "resourceType", "access", "permissionId"),
+            "resourceType", List.of("resourceType", "module", "access", "permissionId"),
+            "access", List.of("access", "module", "resourceType", "permissionId"),
+            "status", List.of("status", "module", "resourceType", "access", "permissionId"),
+            "createdAt", List.of("createdAt", "permissionId"),
+            "updatedAt", List.of("updatedAt", "permissionId"));
 
     private final PermissionRepository permissions;
     private final PermissionMapper permissionMapper;
@@ -48,20 +59,26 @@ public class PermissionService {
         Permission permission = permissions.save(permissionMapper.toEntity(
                 coordinates.module(), coordinates.resourceType(), coordinates.access(),
                 nullableTrim(request.description()), actorSub()));
-        log.info("Permission created [permissionId={}] [coordinates={}] [status={}]",
-                permission.getPermissionId(), coordinates.displayKey(), permission.getStatus());
         return permissionMapper.toResponse(permission);
     }
 
-    public List<PermissionResponse> list() {
-        List<PermissionResponse> result = permissions.findAll().stream().map(permissionMapper::toResponse).toList();
-        log.debug("Permissions listed [count={}]", result.size());
+    public PageResponse<PermissionResponse> list(PermissionFilter filter, int page, int size,
+                                                 String sortBy, String direction) {
+        var pageable = CatalogPagination.create(page, size, sortBy, direction, SORTS, "displayKey");
+        PageResponse<PermissionResponse> result = PageResponse.from(
+                permissions.search(filter, pageable), permissionMapper::toResponse);
+        log.atDebug().addKeyValue("event", "permissions_listed")
+                .addKeyValue("page", result.page())
+                .addKeyValue("resultCount", result.items().size())
+                .addKeyValue("totalElements", result.totalElements())
+                .log("Permissions listed");
         return result;
     }
 
     public PermissionResponse get(String permissionId) {
         Permission permission = requirePermission(permissionId);
-        log.debug("Permission retrieved [permissionId={}]", permissionId);
+        log.atDebug().addKeyValue("event", "permission_retrieved")
+                .addKeyValue("permissionId", permissionId).log("Permission retrieved");
         return permissionMapper.toResponse(permission);
     }
 
@@ -70,12 +87,14 @@ public class PermissionService {
         Permission permission = requirePermission(permissionId);
         String description = request.description().trim();
         if (description.equals(permission.getDescription())) {
-            log.info("Permission description update is idempotent [permissionId={}]", permissionId);
+            log.atDebug().addKeyValue("event", "permission_update_skipped")
+                    .addKeyValue("permissionId", permissionId)
+                    .addKeyValue("reason", "NO_CHANGE")
+                    .log("Permission update skipped");
             return permissionMapper.toResponse(permission);
         }
         permission.updateDescription(description, actorSub());
         permissions.save(permission);
-        log.info("Permission description updated [permissionId={}]", permission.getPermissionId());
         return permissionMapper.toResponse(permission);
     }
 
@@ -99,15 +118,15 @@ public class PermissionService {
     private PermissionResponse changeStatus(String permissionId, PermissionStatus desired) {
         Permission permission = requirePermission(permissionId);
         if (permission.getStatus() == desired) {
-            log.info("Permission status change is idempotent [permissionId={}] [status={}]",
-                    permissionId, desired);
+            log.atDebug().addKeyValue("event", "permission_status_change_skipped")
+                    .addKeyValue("permissionId", permissionId)
+                    .addKeyValue("permissionStatus", desired)
+                    .addKeyValue("reason", "NO_CHANGE")
+                    .log("Permission status change skipped");
             return permissionMapper.toResponse(permission);
         }
-        PermissionStatus before = permission.getStatus();
         permission.setStatus(desired, actorSub());
         permissions.save(permission);
-        log.info("Permission status changed [permissionId={}] [from={}] [to={}]",
-                permission.getPermissionId(), before, desired);
         return permissionMapper.toResponse(permission);
     }
 

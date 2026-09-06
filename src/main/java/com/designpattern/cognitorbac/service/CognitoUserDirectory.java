@@ -72,14 +72,14 @@ public class CognitoUserDirectory {
             if (!hasSubject(confirmedUser.userAttributes(), userSub)) {
                 throw inconsistentIdentity(userSub, "AdminGetUser returned a different subject");
             }
-            log.debug("Validated Cognito user subject [userSub={}]", userSub);
+            log.atDebug().addKeyValue("event", "cognito_user_validated")
+                    .addKeyValue("targetUserSub", userSub)
+                    .log("Cognito user validated");
         } catch (UserNotFoundException ex) {
             throw ResourceNotFoundException.userSub(userSub);
         } catch (CognitoIdentityProviderException ex) {
-            String upstreamMessage = ex.awsErrorDetails() == null
-                    ? ex.getMessage() : ex.awsErrorDetails().errorMessage();
-            log.error("Cognito subject validation failed [userSub={}] [message={}]", userSub, upstreamMessage);
-            throw new CognitoIntegrationException("Cognito operation failed: validateUserSub", ex);
+            throw new CognitoIntegrationException("validateUserSub",
+                    "Cognito operation failed: validateUserSub", ex);
         }
     }
 
@@ -93,7 +93,8 @@ public class CognitoUserDirectory {
     }
 
     private static CognitoIntegrationException inconsistentIdentity(String userSub, String reason) {
-        return new CognitoIntegrationException("Cognito returned inconsistent identity data for sub: " + userSub,
+        return new CognitoIntegrationException("validateUserSub",
+                "Cognito returned inconsistent identity data for sub: " + userSub,
                 new IllegalStateException(reason));
     }
 

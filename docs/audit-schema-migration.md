@@ -1,4 +1,9 @@
-# Audit schema migration
+# Historical audit schema migration
+
+This document is retained only for installations that already contain legacy
+audit documents. The application contains no runtime Cognito-group or AVP-policy
+compatibility implementation. Complete this migration before deploying the
+version that removes the obsolete audit action enum values.
 
 New audit documents use:
 
@@ -13,6 +18,35 @@ The authenticated caller is represented by `user_sub` and `user_email`.
 
 Back up `audit_entries`, stop application writes, and run the following in
 `mongosh` against the Nexus database:
+
+First, preserve audit records for operations this service no longer owns. They
+have no truthful one-to-one mapping to the current role model, so archive them
+rather than relabeling or discarding their history:
+
+```javascript
+const legacyActions = [
+  "GROUP_CREATED", "GROUP_UPDATED", "GROUP_DELETED",
+  "USER_ADDED_TO_GROUP", "USER_REMOVED_FROM_GROUP",
+  "USER_METADATA_UPDATED", "USER_ENABLED", "USER_DISABLED",
+  "POLICY_CREATED", "POLICY_UPDATED", "POLICY_DELETED"
+]
+
+db.audit_entries.aggregate([
+  { $match: { action: { $in: legacyActions } } },
+  { $merge: { into: "audit_entries_legacy", whenMatched: "keepExisting", whenNotMatched: "insert" } }
+])
+
+const sourceCount = db.audit_entries.countDocuments({ action: { $in: legacyActions } })
+const archiveCount = db.audit_entries_legacy.countDocuments({ action: { $in: legacyActions } })
+if (archiveCount < sourceCount) {
+  throw new Error("Legacy audit archive verification failed")
+}
+
+db.audit_entries.deleteMany({ action: { $in: legacyActions } })
+```
+
+Restrict `audit_entries_legacy` to compliance/audit readers; the application
+does not query it. Then migrate the retained current-model documents:
 
 ```javascript
 db.audit_entries.updateMany(

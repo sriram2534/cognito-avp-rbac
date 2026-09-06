@@ -11,7 +11,7 @@
 | Permissions | MongoDB `nexus_permissions` |
 | Role-to-permission assignment | MongoDB `nexus_role_permissions` |
 | Audit history | MongoDB `audit_entries` |
-| Runtime allow/deny decision | External authorization service |
+| Runtime allow/deny decision | Future external authorization service |
 
 This service never creates, reads, or mutates Cognito groups. It lists and
 reads Cognito users from the user pool, then resolves their Nexus roles using
@@ -39,7 +39,8 @@ responses or used as a public relationship key.
 
 - `roleId` is an immutable UUID and public API identifier: unique index.
 - `roleKey` is immutable canonical lowercase `<module>:<role>`: unique index.
-- `(module, name)` is unique; `(module, status)` supports catalog filtering.
+- `(module, name)` is unique; catalog indexes beginning with `status` or
+  `module` support filtered, deterministic catalog pagination.
 - Roles are activated/deactivated; they are never hard-deleted.
 
 ### `nexus_user_roles`
@@ -71,9 +72,10 @@ deliveryops:stores:write
 ```
 
 `permissionId` is an immutable UUID. Unique indexes exist on `permissionId`
-and `(module, resourceType, access)`. Supported access values are `read`,
-`write`, `export`, `approve`, and `manage`. A permission can be activated or
-deactivated; its coordinates cannot change.
+and `(module, resourceType, access)`. A catalog index on status and the
+permission coordinates supports filtered, deterministic pagination. Supported
+access values are `read`, `write`, `export`, `approve`, and `manage`. A
+permission can be activated or deactivated; its coordinates cannot change.
 
 ### `nexus_role_permissions`
 
@@ -99,8 +101,9 @@ deactivated; its coordinates cannot change.
 
 ## Fast authorization aggregation
 
-The external authorization service should not aggregate Mongo collections on
-every request. Keep two cache layers:
+The external authorization service is intentionally not part of this project
+and will be implemented later. Its planned design should not aggregate Mongo
+collections on every request. It should keep two cache layers:
 
 ```text
 userSub -> active roleIds
@@ -136,15 +139,16 @@ relationships once and its permission documents with one `permissionId in
 
 All API routes require a Cognito access token containing `token_use=access`,
 `sub`, `email`, and the configured application-client audience/client ID.
-External authorization must grant or deny administrative access before requests
-reach this service. Every write requires a nonblank `X-Audit-Reason`;
+The future external authorization service must grant or deny administrative
+access before requests reach this service. Until then, private ingress must
+prevent end-user access. Every write requires a nonblank `X-Audit-Reason`;
 `X-Correlation-Id` is optional and is returned as `X-Request-Id`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/users` | List Cognito users; `includeRoles=true` includes Nexus role keys. |
 | `GET` | `/api/v1/users/{username}` | Get Cognito identity plus active Nexus role keys. |
-| `GET` | `/api/v1/roles` | List Nexus roles. |
+| `GET` | `/api/v1/roles` | Paginate and filter Nexus roles. |
 | `POST` | `/api/v1/roles` | Create role. |
 | `GET` | `/api/v1/roles/{roleId}` | Get role. |
 | `PATCH` | `/api/v1/roles/{roleId}` | Change display name or description. |
@@ -156,7 +160,7 @@ reach this service. Every write requires a nonblank `X-Audit-Reason`;
 | `GET` | `/api/v1/roles/{roleId}/permissions` | List role permissions. |
 | `POST` | `/api/v1/roles/{roleId}/permissions/{permissionId}` | Grant permission. |
 | `DELETE` | `/api/v1/roles/{roleId}/permissions/{permissionId}` | Revoke permission. |
-| `GET` | `/api/v1/permissions` | List permissions. |
+| `GET` | `/api/v1/permissions` | Paginate and filter permissions. |
 | `POST` | `/api/v1/permissions` | Create permission. |
 | `GET` | `/api/v1/permissions/{permissionId}` | Get permission. |
 | `PATCH` | `/api/v1/permissions/{permissionId}` | Change description. |
@@ -164,6 +168,70 @@ reach this service. Every write requires a nonblank `X-Audit-Reason`;
 | `POST` | `/api/v1/permissions/{permissionId}/deactivate` | Deactivate permission. |
 | `GET` | `/api/v1/permissions/{permissionId}/roles` | List active role-permission assignments. |
 | `GET` | `/api/v1/audit/**` | Search audit history. |
+
+### Role and permission catalog pagination
+
+Both catalog endpoints use zero-based offset pagination. The default page size
+is 20 and the maximum is 100. Invalid page, size, direction, status, or sort
+values return `400 VALIDATION_FAILED`.
+
+Role query parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `page`, `size` | Zero-based page number and page size. |
+| `module` | Exact case-normalized module filter. |
+| `status` | Exact `ACTIVE` or `INACTIVE` filter. |
+| `search` | Case-insensitive literal substring across role key, name, display name, and description. |
+| `sortBy` | `roleKey`, `module`, `name`, `displayName`, `status`, `createdAt`, or `updatedAt`. Default: `module`. |
+| `direction` | `asc` or `desc`. Default: `asc`. |
+
+Permission query parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `page`, `size` | Zero-based page number and page size. |
+| `module`, `resourceType`, `access` | Exact case-normalized coordinate filters. |
+| `status` | Exact `ACTIVE` or `INACTIVE` filter. |
+| `search` | Case-insensitive literal substring across module, resource type, access, and description. |
+| `sortBy` | `displayKey`, `module`, `resourceType`, `access`, `status`, `createdAt`, or `updatedAt`. Default: `displayKey`. |
+| `direction` | `asc` or `desc`. Default: `asc`. |
+
+Example:
+
+```text
+GET /api/v1/permissions?module=deliveryops&status=ACTIVE&page=0&size=25&sortBy=displayKey&direction=asc
+```
+
+```json
+{
+  "items": [
+    {
+      "permissionId": "b9c211aa-5271-4a97-8ea8-4679cc4783dd",
+      "module": "deliveryops",
+      "resourceType": "stores",
+      "access": "write",
+      "displayKey": "deliveryops:stores:write",
+      "status": "ACTIVE"
+    }
+  ],
+  "page": 0,
+  "size": 25,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true,
+  "hasNext": false,
+  "hasPrevious": false
+}
+```
+
+Every exposed sort expands to a deterministic MongoDB sort ending in the
+external UUID, preventing items from moving between adjacent pages when the
+primary sort value is duplicated. Exact coordinate and status filters use the
+catalog indexes. `search` safely escapes regular-expression characters, but a
+broad substring search can scan the catalog; prefer exact filters for large
+datasets or introduce MongoDB Atlas Search as a separately reviewed feature.
 
 Create a role:
 

@@ -3,6 +3,7 @@ package com.designpattern.cognitorbac.service;
 import com.designpattern.cognitorbac.audit.AuthorizationAudit;
 import com.designpattern.cognitorbac.audit.AuthorizationAuditOperation;
 import com.designpattern.cognitorbac.dto.CreateRoleRequest;
+import com.designpattern.cognitorbac.dto.PageResponse;
 import com.designpattern.cognitorbac.dto.RoleResponse;
 import com.designpattern.cognitorbac.dto.UpdateRoleRequest;
 import com.designpattern.cognitorbac.dto.UserRoleResponse;
@@ -13,11 +14,10 @@ import com.designpattern.cognitorbac.permission.RoleKey;
 import com.designpattern.cognitorbac.role.NexusRole;
 import com.designpattern.cognitorbac.role.NexusRoleRepository;
 import com.designpattern.cognitorbac.role.NexusRoleStatus;
+import com.designpattern.cognitorbac.role.RoleFilter;
 import com.designpattern.cognitorbac.role.NexusUserRole;
 import com.designpattern.cognitorbac.role.NexusUserRoleRepository;
 import com.designpattern.cognitorbac.role.NexusUserRoleStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +34,14 @@ import java.util.stream.Collectors;
 /** Owns database-backed Nexus roles and user-to-role memberships. */
 @Service
 public class RoleService {
-    private static final Logger log = LoggerFactory.getLogger(RoleService.class);
+    private static final Map<String, List<String>> SORTS = Map.of(
+            "roleKey", List.of("roleKey", "roleId"),
+            "module", List.of("module", "name", "roleId"),
+            "name", List.of("name", "roleId"),
+            "displayName", List.of("displayName", "roleId"),
+            "status", List.of("status", "module", "name", "roleId"),
+            "createdAt", List.of("createdAt", "roleId"),
+            "updatedAt", List.of("updatedAt", "roleId"));
 
     private final NexusRoleRepository roles;
     private final NexusUserRoleRepository userRoles;
@@ -56,14 +63,13 @@ public class RoleService {
         }
         NexusRole role = roles.save(roleMapper.toRoleEntity(coordinates.roleKey(), coordinates.module(),
                 coordinates.name(), trim(request.displayName()), trim(request.description()), PermissionService.actorSub()));
-        log.info("Nexus role created [roleId={}] [roleKey={}]", role.getRoleId(), role.getRoleKey());
         return roleMapper.toResponse(role);
     }
 
-    public List<RoleResponse> list() {
-        return roles.findAll().stream().sorted(java.util.Comparator
-                        .comparing(NexusRole::getModule).thenComparing(NexusRole::getName))
-                .map(roleMapper::toResponse).toList();
+    public PageResponse<RoleResponse> list(RoleFilter filter, int page, int size,
+                                           String sortBy, String direction) {
+        var pageable = CatalogPagination.create(page, size, sortBy, direction, SORTS, "module");
+        return PageResponse.from(roles.search(filter, pageable), roleMapper::toResponse);
     }
 
     public RoleResponse get(String roleId) {
@@ -119,8 +125,6 @@ public class RoleService {
         if (!changed.isEmpty()) {
             userRoles.saveAll(changed);
         }
-        log.info("Nexus role memberships processed [roleId={}] [requested={}] [changed={}]",
-                role.getRoleId(), normalizedUserSubs.size(), changed.size());
         return result.stream().map(roleMapper::toUserRoleResponse).toList();
     }
 

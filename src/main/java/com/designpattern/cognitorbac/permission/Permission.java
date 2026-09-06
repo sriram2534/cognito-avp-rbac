@@ -15,6 +15,8 @@ import java.time.Instant;
  */
 @Document(collection = "nexus_permissions")
 @CompoundIndex(name = "ux_permission_coordinates", def = "{'module': 1, 'resourceType': 1, 'access': 1}", unique = true)
+@CompoundIndex(name = "ix_permissions_catalog", def = "{'status': 1, 'module': 1, 'resourceType': 1, 'access': 1, 'permissionId': 1}")
+@CompoundIndex(name = "ix_permissions_catalog_order", def = "{'module': 1, 'resourceType': 1, 'access': 1, 'permissionId': 1}")
 public class Permission {
 
     @Id

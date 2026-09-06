@@ -8,8 +8,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 
 /**
- * Wires the AWS Cognito Identity Provider client used for all admin-level
- * user/group operations against the configured User Pool.
+ * Wires the AWS Cognito Identity Provider client used only for identity reads
+ * and user-existence validation against the configured User Pool.
  *
  * <p>Credentials are resolved via the {@link DefaultCredentialsProvider} chain
  * (environment variables, system properties, profile files, container/EC2/IRSA

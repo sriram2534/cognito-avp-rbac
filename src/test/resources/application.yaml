@@ -5,6 +5,8 @@ cognito:
   default-page-size: 25
 
 spring:
+  profiles:
+    default: local
   data:
     mongodb:
       auto-index-creation: false
